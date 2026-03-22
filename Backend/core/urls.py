@@ -22,4 +22,5 @@ urlpatterns = [
     path('', RedirectToAdminView.as_view(), name='root'),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls_token')),
+    path('api/', include('api.urls_users')),
 ]
