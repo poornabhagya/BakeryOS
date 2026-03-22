@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 class User(AbstractUser):
     ROLE_CHOICES = [
@@ -16,11 +17,14 @@ class User(AbstractUser):
     role = models.CharField(max_length=50, choices=ROLE_CHOICES, default='Cashier')
     status = models.CharField(max_length=20, default='Active', choices=[('Active', 'Active'), ('Inactive', 'Inactive')])
     avatar_color = models.CharField(max_length=20, default='blue')
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         ordering = ['-date_joined']
         indexes = [
             models.Index(fields=['employee_id']),
+            models.Index(fields=['username']),
             models.Index(fields=['role']),
             models.Index(fields=['status']),
         ]
