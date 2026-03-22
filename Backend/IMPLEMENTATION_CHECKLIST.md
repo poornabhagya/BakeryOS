@@ -43,7 +43,7 @@
 
 ---
 
-## Phase 2: Authentication & Users 👤
+## Phase 2: Authentication & Users 👤✅ 
 
 ### 2.1 User Model
 - [ ] Extend AbstractUser with fields:

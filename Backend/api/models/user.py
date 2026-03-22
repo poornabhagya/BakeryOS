@@ -15,7 +15,11 @@ class User(AbstractUser):
     nic = models.CharField(max_length=50, null=True, blank=True)
     contact = models.CharField(max_length=20, null=True, blank=True)
     role = models.CharField(max_length=50, choices=ROLE_CHOICES, default='Cashier')
-    status = models.CharField(max_length=20, default='Active', choices=[('Active', 'Active'), ('Inactive', 'Inactive')])
+    status = models.CharField(
+        max_length=20, 
+        default='active', 
+        choices=[('active', 'Active'), ('inactive', 'Inactive'), ('suspended', 'Suspended')]
+    )
     avatar_color = models.CharField(max_length=20, default='blue')
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
