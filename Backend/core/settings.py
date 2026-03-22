@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'rest_framework', 
+    'rest_framework.authtoken',  # Token auth
     'corsheaders',
     'drf_spectacular',
     
@@ -102,7 +103,7 @@ CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
