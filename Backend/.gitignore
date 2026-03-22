@@ -1,0 +1,30 @@
+# Python
+Backend/venv/
+Backend/__pycache__/
+Backend/*.pyc
+Backend/.env
+Backend/db.sqlite3
+Backend/.DS_Store
+Backend/staticfiles/
+Backend/media/uploads/
+
+# Node/React
+Frontend/node_modules/
+Frontend/dist/
+Frontend/build/
+Frontend/.env.local
+Frontend/.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+*.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

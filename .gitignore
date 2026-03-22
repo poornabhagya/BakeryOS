@@ -1,0 +1,96 @@
+# Git Ignore for BakeryOS - Full Stack Application
+
+# ============================================================
+# PYTHON / DJANGO (Backend)
+# ============================================================
+Backend/venv/
+Backend/env/
+Backend/*.pyc
+Backend/__pycache__/
+Backend/db.sqlite3
+Backend/.env
+Backend/.env.local
+Backend/.env.*.local
+Backend/staticfiles/
+Backend/media/
+Backend/*.egg-info/
+Backend/dist/
+Backend/build/
+Backend/.pytest_cache/
+Backend/.coverage
+Backend/htmlcov/
+Backend/*.pot
+
+# ============================================================
+# NODE / REACT (Frontend)
+# ============================================================
+Frontend/node_modules/
+Frontend/dist/
+Frontend/build/
+Frontend/.env.local
+Frontend/.env.development.local
+Frontend/.env.test.local
+Frontend/.env.production.local
+Frontend/npm-debug.log*
+Frontend/yarn-debug.log*
+Frontend/yarn-error.log*
+
+# ============================================================
+# IDE / Editor
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+Thumbs.db
+*.log
+*.log.*
+
+# ============================================================
+# Environment Variables (NEVER PUSH CREDENTIALS)
+# ============================================================
+.env
+.env.local
+.env.*.local
+
+# ============================================================
+# IDE Settings (Optional)
+# ============================================================
+.vscode/settings.json
+.vscode/extensions.json
+.idea/workspace.xml
+
+# ============================================================
+# Temporary Files
+# ============================================================
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# ============================================================
+# Database Files
+# ============================================================
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+
+# ============================================================
+# Docker
+# ============================================================
+.dockerignore
+docker-compose.override.yml
