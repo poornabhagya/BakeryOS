@@ -1,12 +1,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from api.views import LoginView, LogoutView, MeView
-from api.views import UserViewSet, CategoryViewSet
+from api.views import UserViewSet, CategoryViewSet, IngredientViewSet
 
 # Create router for viewsets
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'categories', CategoryViewSet, basename='category')
+router.register(r'ingredients', IngredientViewSet, basename='ingredient')
 
 app_name = 'api'
 
@@ -49,3 +50,16 @@ urlpatterns = auth_patterns + router.urls
 # GET    /api/categories/by-type/              - Filter by type
 # GET    /api/categories/products/             - Get product categories
 # GET    /api/categories/ingredients/          - Get ingredient categories
+#
+# INGREDIENTS:
+# GET    /api/ingredients/                     - List ingredients (with filters)
+# POST   /api/ingredients/                     - Create ingredient (Manager, Storekeeper)
+# GET    /api/ingredients/{id}/                - Get ingredient details
+# PUT    /api/ingredients/{id}/                - Update ingredient (Manager, Storekeeper)
+# PATCH  /api/ingredients/{id}/                - Partial update (Manager, Storekeeper)
+# DELETE /api/ingredients/{id}/                - Soft delete ingredient (Manager)
+# GET    /api/ingredients/low-stock/           - Get low-stock ingredients
+# GET    /api/ingredients/out-of-stock/        - Get out-of-stock ingredients
+# GET    /api/ingredients/by-category/         - Get ingredients by category
+# GET    /api/ingredients/{id}/history/        - Get stock history (after IngredientStockHistory)
+# POST   /api/ingredients/{id}/reset-quantity/ - Reset quantity (Manager)
