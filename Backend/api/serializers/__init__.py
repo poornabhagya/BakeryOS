@@ -31,6 +31,13 @@ from .batch_serializers import (
     BatchConsumeSerializer,
     BatchFilterSerializer,
 )
+from .product_serializers import (
+    ProductListSerializer,
+    ProductDetailSerializer,
+    ProductCreateSerializer,
+    ProductSearchSerializer,
+    ProductFilterSerializer,
+)
 
 __all__ = [
     'LoginSerializer',
@@ -56,4 +63,9 @@ __all__ = [
     'BatchCreateSerializer',
     'BatchConsumeSerializer',
     'BatchFilterSerializer',
+    'ProductListSerializer',
+    'ProductDetailSerializer',
+    'ProductCreateSerializer',
+    'ProductSearchSerializer',
+    'ProductFilterSerializer',
 ]
