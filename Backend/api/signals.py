@@ -28,3 +28,34 @@ def generate_employee_id(sender, instance, **kwargs):
         
         # Format with leading zeros (3 digits)
         instance.employee_id = f'EMP-{new_number:03d}'
+
+
+# Product signal - Registered after models are fully loaded
+def setup_product_signals():
+    """Register Product signals after app is ready"""
+    from .models import Product
+    
+    @receiver(pre_save, sender=Product)
+    def auto_generate_product_id(sender, instance, **kwargs):
+        """
+        Auto-generate product_id if not already set.
+        Format: #PROD-1001, #PROD-1002, etc.
+        """
+        if not instance.product_id:
+            # Get the last product_id sequence number
+            last_product = Product.objects.filter(
+                product_id__startswith='#PROD-'
+            ).order_by('-product_id').first()
+            
+            if last_product:
+                # Extract sequence number and increment
+                try:
+                    seq = int(last_product.product_id.split('-')[1])
+                    next_seq = seq + 1
+                except (IndexError, ValueError):
+                    next_seq = 1001
+            else:
+                # Start from 1001
+                next_seq = 1001
+            
+            instance.product_id = f'#PROD-{next_seq}'

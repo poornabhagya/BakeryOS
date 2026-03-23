@@ -7,3 +7,5 @@ class ApiConfig(AppConfig):
     def ready(self):
         """Import signals when the app is ready"""
         from . import signals  # noqa
+        # Setup product signals (deferred loading)
+        signals.setup_product_signals()
