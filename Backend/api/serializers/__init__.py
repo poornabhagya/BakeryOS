@@ -10,6 +10,13 @@ from .user_serializers import (
     UserStatusSerializer,
     UserMinimalSerializer,
 )
+from .category_serializers import (
+    CategoryListSerializer,
+    CategoryDetailSerializer,
+    CategoryCreateSerializer,
+    CategoryUpdateSerializer,
+    CategoryMinimalSerializer,
+)
 
 __all__ = [
     'LoginSerializer',
@@ -20,4 +27,9 @@ __all__ = [
     'UserUpdateSerializer',
     'UserStatusSerializer',
     'UserMinimalSerializer',
+    'CategoryListSerializer',
+    'CategoryDetailSerializer',
+    'CategoryCreateSerializer',
+    'CategoryUpdateSerializer',
+    'CategoryMinimalSerializer',
 ]
