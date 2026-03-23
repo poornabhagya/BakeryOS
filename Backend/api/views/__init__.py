@@ -6,6 +6,7 @@ from .auth_token import (
 from .user_views import UserViewSet
 from .category_views import CategoryViewSet
 from .ingredient_views import IngredientViewSet
+from .batch_views import BatchViewSet
 
 __all__ = [
     'LoginView',
@@ -14,4 +15,5 @@ __all__ = [
     'UserViewSet',
     'CategoryViewSet',
     'IngredientViewSet',
+    'BatchViewSet',
 ]
