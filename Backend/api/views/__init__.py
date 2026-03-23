@@ -5,6 +5,7 @@ from .auth_token import (
 )
 from .user_views import UserViewSet
 from .category_views import CategoryViewSet
+from .ingredient_views import IngredientViewSet
 
 __all__ = [
     'LoginView',
@@ -12,4 +13,5 @@ __all__ = [
     'MeView',
     'UserViewSet',
     'CategoryViewSet',
+    'IngredientViewSet',
 ]

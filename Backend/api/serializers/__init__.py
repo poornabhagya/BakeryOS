@@ -17,6 +17,13 @@ from .category_serializers import (
     CategoryUpdateSerializer,
     CategoryMinimalSerializer,
 )
+from .ingredient_serializers import (
+    IngredientListSerializer,
+    IngredientDetailSerializer,
+    IngredientCreateSerializer,
+    IngredientUpdateSerializer,
+    IngredientMinimalSerializer,
+)
 
 __all__ = [
     'LoginSerializer',
@@ -32,4 +39,9 @@ __all__ = [
     'CategoryCreateSerializer',
     'CategoryUpdateSerializer',
     'CategoryMinimalSerializer',
+    'IngredientListSerializer',
+    'IngredientDetailSerializer',
+    'IngredientCreateSerializer',
+    'IngredientUpdateSerializer',
+    'IngredientMinimalSerializer',
 ]
