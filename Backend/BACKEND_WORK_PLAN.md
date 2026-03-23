@@ -356,46 +356,69 @@ GET    /api/products/low-stock/    - Get low-stock products
 ---
 
 ### Task 3.5: Implement Recipe Management
-**Status:** NOT STARTED  
+**Status:** COMPLETE ✅  
 **Complexity:** Medium  
-**Time Est:** 4 hours
+**Time Est:** 4 hours | **Actual:** Completed
+**Completion Date:** March 23, 2026
 
-**Models:**
-- `RecipeItem`
+**Models:** ✅
+- `RecipeItem` - Fully implemented
   - Fields: product_id (FK), ingredient_id (FK), quantity_required, created_at, updated_at
   - Unique constraint: (product_id, ingredient_id)
+  - Validation: quantity_required > 0
 
-**Endpoints:**
+**Endpoints:** ✅ ALL WORKING
 ```
-GET    /api/recipes/{product_id}/          - Get recipe for product
-POST   /api/recipes/{product_id}/items/    - Add ingredient to recipe (Manager)
-PUT    /api/recipes/{product_id}/items/{ingredient_id}/ - Update recipe item qty
-DELETE /api/recipes/{product_id}/items/{ingredient_id}/ - Remove ingredient from recipe
-GET    /api/recipes/validate/{product_id}/ - Check if enough ingredients to make product
-GET    /api/recipes/batch-required/{product_id}?qty=10 - Calculate ingredients for batch
+GET    /api/recipes/{id}/                  - Get recipe for product ✓
+POST   /api/recipes/{id}/items/            - Add ingredient to recipe (Manager) ✓
+PUT    /api/recipes/{id}/items/{ing_id}/   - Update recipe item qty ✓
+DELETE /api/recipes/{id}/items/{ing_id}/   - Remove ingredient from recipe ✓
+GET    /api/recipes/{id}/validate/         - Check if can make product ✓
+GET    /api/recipes/{id}/batch_required/   - Calculate ingredients for batch ✓
 ```
 
-**Serializers:**
-- RecipeItemSerializer
-- RecipeDetailSerializer (expands to full ingredient info)
-- RecipeValidationSerializer
+**Serializers:** ✅ 5 SERIALIZERS
+- RecipeItemSerializer - CRUD operations with validation
+- RecipeDetailSerializer - Expanded ingredient info with costs
+- RecipeListSerializer - Aggregated recipe view
+- RecipeValidationSerializer - Validation result format
+- BatchCalculationSerializer - Batch requirements response
 
-**Business Logic:**
-- Prevent duplicate ingredients in same recipe
+**Business Logic:** ✅ ALL IMPLEMENTED
+- Prevent duplicate ingredients in same recipe (unique constraint + validation)
 - Calculate cost_price automatically from recipe when saved
-- Validate quantity_required is positive
+- Validate quantity_required is positive (model.save())
 - Endpoint to calculate ingredient needs for batch production
+- Auto-recalculate when recipe items modified
 
-**Permissions:**
+**Permissions:** ✅ ENFORCED
 - Manager: Full CRUD on recipes
 - Baker: Read-only + validation
-- Others: No access
+- Others: No access (403 Forbidden)
 
-**Deliverables:**
-- RecipeItem model with migrations
-- Full recipe CRUD API
-- Validation & batch calculation endpoints
-- Automatic cost_price calculation
+**Database:** ✅ MIGRATED
+- Migration 0008_recipeitem_and_more.py applied successfully
+- RecipeItem table with proper indexes
+- Unique constraint on (product_id, ingredient_id)
+
+**URL Routing:** ✅ FIXED
+- Changed from detail=False with complex regex to detail=True
+- All URLs now clean: /api/recipes/{id}/{action}/
+- No more 301 redirects
+
+**Testing & Documentation:** ✅ COMPLETE
+- TASK_3_5_TESTING_GUIDE.md - Comprehensive manual testing guide
+- TASK_3_5_COMPLETION_REPORT.md - Full implementation details
+- 6 test cases with expected responses
+- Business logic validations documented
+- Error scenarios covered
+
+**Deliverables:** ✅ ALL COMPLETE
+- [✓] RecipeItem model with migrations
+- [✓] Full recipe CRUD API (6 endpoints)
+- [✓] Validation & batch calculation endpoints  
+- [✓] Automatic cost_price calculation
+- [✓] Comprehensive testing documentation
 
 ---
 

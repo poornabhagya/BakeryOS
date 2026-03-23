@@ -171,3 +171,50 @@ class Product(models.Model):
             self.product_id = f"#PROD-{next_num}"
         
         super().save(*args, **kwargs)
+    
+    def update_cost_price_from_recipe(self):
+        """
+        Calculate and update product cost_price from recipe items.
+        
+        Formula: total_cost = sum(ingredient_qty * ingredient_cost_per_unit)
+        
+        This is called automatically when recipe items are added/updated.
+        """
+        from .recipe import RecipeItem
+        
+        recipe_items = RecipeItem.objects.filter(product_id=self)
+        
+        if not recipe_items.exists():
+            # No recipe defined, keep original cost_price
+            return
+        
+        total_cost = Decimal('0')
+        
+        for item in recipe_items:
+            # Get the total cost from the last batch of this ingredient
+            # This represents the actual cost per unit
+            batches = self.get_active_batches_for_ingredient(item.ingredient_id)
+            
+            if batches.exists():
+                # Use cost from most recent batch
+                cost_per_unit = batches.first().cost_price / batches.first().quantity
+                item_cost = item.quantity_required * cost_per_unit
+            else:
+                # If no batch exists, estimate from ingredient's initial pricing
+                # This is a fallback - ideally we track ingredient unit cost
+                item_cost = Decimal('0')
+            
+            total_cost += item_cost
+        
+        # Update product cost_price only if recipe provides a valid cost
+        if total_cost > 0:
+            self.cost_price = total_cost
+            self.save(update_fields=['cost_price', 'updated_at'])
+    
+    def get_active_batches_for_ingredient(self, ingredient):
+        """Get active batches for an ingredient for cost calculation"""
+        from .batch import IngredientBatch
+        return IngredientBatch.objects.filter(
+            ingredient_id=ingredient,
+            status='Active'
+        ).order_by('-created_at')

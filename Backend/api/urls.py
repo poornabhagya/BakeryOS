@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from api.views import LoginView, LogoutView, MeView
-from api.views import UserViewSet, CategoryViewSet, IngredientViewSet, BatchViewSet, ProductViewSet
+from api.views import UserViewSet, CategoryViewSet, IngredientViewSet, BatchViewSet, ProductViewSet, RecipeViewSet
 
 # Create router for viewsets
 router = DefaultRouter()
@@ -10,6 +10,7 @@ router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'ingredients', IngredientViewSet, basename='ingredient')
 router.register(r'batches', BatchViewSet, basename='batch')
 router.register(r'products', ProductViewSet, basename='product')
+router.register(r'recipes', RecipeViewSet, basename='recipe')
 
 app_name = 'api'
 
