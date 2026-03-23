@@ -50,7 +50,7 @@ curl -H "Authorization: Token $TOKEN" http://localhost:8000/api/ingredients/
 
 ## 📚 Current API Endpoints
 
-### Categories (6 endpoints)
+### Categories (7 endpoints)
 ```
 GET     /api/categories/                    List all
 POST    /api/categories/                    Create
@@ -73,6 +73,22 @@ GET     /api/ingredients/low_stock/             Low-stock items
 GET     /api/ingredients/by_category/           Group by category
 GET     /api/ingredients/out_of_stock/          Zero quantity items
 GET     /api/ingredients/?search=QUERY          Search
+```
+
+### Batches (12 endpoints) ✨ NEW
+```
+GET     /api/batches/                           List all (FIFO order)
+POST    /api/batches/                           Create new
+GET     /api/batches/{id}/                      Details
+PUT     /api/batches/{id}/                      Replace
+PATCH   /api/batches/{id}/                      Partial update
+DELETE  /api/batches/{id}/                      Delete
+GET     /api/batches/expiring/                  Expiring within N days
+GET     /api/batches/expired/                   All expired
+GET     /api/batches/out-of-stock/              Zero quantity
+GET     /api/batches/by-ingredient/{id}/        Batches for ingredient (FIFO)
+POST    /api/batches/{id}/consume/              Consume from batch
+POST    /api/batches/update-expiry-status/      Update all expirations
 ```
 
 ---
@@ -156,7 +172,40 @@ curl -X DELETE http://localhost:8000/api/ingredients/1/ \
   -H "Authorization: Token $TOKEN"
 ```
 
----
+### Create New Batch ✨ NEW
+```bash
+curl -X POST http://localhost:8000/api/batches/ \
+  -H "Authorization: Token $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ingredient_id": 1,
+    "quantity": "50.00",
+    "current_qty": "50.00",
+    "cost_price": "12.50",
+    "made_date": "2026-03-23T10:00:00Z",
+    "expire_date": "2026-05-23T10:00:00Z"
+  }'
+```
+
+### Get Batches by Ingredient (FIFO) ✨ NEW
+```bash
+curl -H "Authorization: Token $TOKEN" \
+  http://localhost:8000/api/batches/by-ingredient/1/
+```
+
+### Consume from Batch ✨ NEW
+```bash
+curl -X POST http://localhost:8000/api/batches/1/consume/ \
+  -H "Authorization: Token $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": "15.00"}'
+```
+
+### Get Expiring Batches ✨ NEW
+```bash
+curl -H "Authorization: Token $TOKEN" \
+  "http://localhost:8000/api/batches/expiring/?days=7"
+```
 
 ## 🧪 Testing
 
@@ -164,6 +213,7 @@ curl -X DELETE http://localhost:8000/api/ingredients/1/ \
 ```bash
 python test_categories_endpoints.py
 python test_ingredients_endpoints.py
+python test_batches_endpoints.py
 ```
 
 ### Run Single Test
@@ -234,7 +284,13 @@ SELECT * FROM api_ingredient;    # View ingredients
 | 12 | Others | Ingredient | 3 |
 
 ### Ingredients (18 seeded)
-All initially at 0 quantity - will populate via IngredientBatch (Task 3.3)
+All ingredients loaded with 0 quantity (waiting for batches)
+
+### Batches (54 seeded) ✨ NEW
+- 3 batches per ingredient
+- Active: 36 batches
+- Expired: 18 batches
+- Total available quantity: ~3,600 units
 
 ---
 
@@ -380,6 +436,7 @@ Features:
 ### Documentation
 - [TESTING_GUIDE_TASK_3_1.md](TESTING_GUIDE_TASK_3_1.md) - Category API docs
 - [TESTING_GUIDE_TASK_3_2.md](TESTING_GUIDE_TASK_3_2.md) - Ingredient API docs
+- [TESTING_GUIDE_TASK_3_3.md](TESTING_GUIDE_TASK_3_3.md) - Batch API docs ✨ NEW
 - [PROJECT_SUMMARY_PHASE_3.md](PROJECT_SUMMARY_PHASE_3.md) - Overall status
 
 ### Command Reference

@@ -1,7 +1,7 @@
 # BakeryOS Project - Backend Development Summary (Phase 3)
 **Status:** On Track ✅  
 **Last Updated:** March 23, 2026  
-**Completed Tasks:** 3.1 ✅, 3.2 ✅  
+**Completed Tasks:** 3.1 ✅, 3.2 ✅, 3.3 ✅  
 **Current Phase:** Testing & Documentation
 
 ---
@@ -10,15 +10,15 @@
 
 ### Phase 3: Core Model & API Development (Tasks 3.1 - 3.6)
 **Estimated Duration:** 24 hours  
-**Time Spent:** ~5 hours  
-**Completion:** ~21%
+**Time Spent:** ~8 hours  
+**Completion:** ~33%
 
 | Task | Title | Estimate | Status | Notes |
 |------|-------|----------|--------|-------|
 | 3.1 | Category Model & Management | 3 hrs | ✅ DONE | 6 categories seeded |
 | 3.2 | Ingredient Model & Management | 4 hrs | ✅ DONE | 18 ingredients seeded |
-| 3.3 | Ingredient Batch & Expiry | 4 hrs | 📋 TODO | Batch tracking |
-| 3.4 | Wastage Management | 3 hrs | 📋 TODO | Track waste |
+| 3.3 | Ingredient Batch & Expiry | 4 hrs | ✅ DONE | 54 batches seeded, FIFO logic |
+| 3.4 | Wastage Management | 3 hrs | 📋 TODO | Track waste/damage |
 | 3.5 | Recipe & Product Management | 5 hrs | 📋 TODO | Products & recipes |
 | 3.6 | Sales & Billing | 5 hrs | 📋 TODO | Sales tracking |
 
@@ -310,6 +310,13 @@ python manage.py shell
    - Stock status logic explained
    - Troubleshooting guide
 
+3. **[TESTING_GUIDE_TASK_3_3.md](TESTING_GUIDE_TASK_3_3.md)**
+   - Ingredient Batch API documentation
+   - 12 endpoint tests with curl examples
+   - FIFO consumption logic explained
+   - Stock quantity sync with signals
+   - Expiry management guide
+
 ### Inline Code Documentation
 - Model docstrings in `models.py`
 - Serializer validation docstrings
@@ -318,62 +325,128 @@ python manage.py shell
 
 ---
 
-## 🎯 Next Steps (Task 3.3)
+## ✅ Task 3.3 - Ingredient Batch Management
 
-### Ingredient Batch Management (4 hours)
+### Completed Components
 
-**Deliverables:**
-1. **IngredientBatch Model**
-   - batch_id (Auto: #B001 format)
-   - ingredient_id (FK)
-   - quantity_received (Decimal)
-   - cost_per_unit (optional)
-   - received_date (DateTime)
-   - expiry_date (DateTime)
-   - supplier_batch_id (optional)
-   - batch_notes (optional)
-   - remaining_quantity (calculated)
-   - is_expired (calculated)
+#### 1. **IngredientBatch Model**
+```python
+class IngredientBatch(BaseModel):
+    batch_id        # Auto: BATCH-1001, BATCH-1002...
+    ingredient_id   # FK → Ingredient
+    quantity        # Total received, > 0
+    current_qty     # Remaining, ≤ quantity
+    cost_price      # Optional, for financial tracking
+    made_date       # When batch was received
+    expire_date     # Expiry date (≥ made_date)
+    status          # Active, Expired, Used
+    created_at      # Creation timestamp
+    updated_at      # Last update timestamp
+```
 
-2. **Batch API Endpoints**
-   - List batches by ingredient
-   - Create new batch → auto-update ingredient quantity
-   - Update batch → track quantity changes
-   - Mark batch as expired
-   - Get batch history (FIFO for expiry)
+**Features:**
+✅ Auto-ID generation (BATCH-1001 format)  
+✅ FIFO ordering by expire_date  
+✅ Computed properties (is_expired, days_until_expiry, total_cost)  
+✅ Quantity validation (current_qty ≤ quantity)  
+✅ Expiry validation (expire_date ≥ made_date)  
+✅ Soft delete support  
 
-3. **Integration with Ingredients**
-   - Signal to update Ingredient.total_quantity
-   - Track batch from receipt → consumption/wastage
-   - Calculate average cost per ingredient
-   - Expiry date tracking & alerts
+#### 2. **Signal Integration**
+- Auto-sync Ingredient.total_quantity on batch changes
+- Triggers for: create, update, delete
+- Recalculates total from active batches only
 
-4. **Testing**
-   - Batch creation & quantity sync
-   - Expiry date calculations
-   - Quantity updates & history
-   - Permission checks
+#### 3. **Serializers Implemented**
+- `BatchListSerializer` - List view with essential fields
+- `BatchDetailSerializer` - Full details with computed fields
+- `BatchCreateSerializer` - Custom validation
+- `BatchConsumeSerializer` - Consume/deduct amount
+- `BatchFilterSerializer` - Filter parameters
 
-**Estimated Timeline:** 4 hours (including testing)
+#### 4. **API Endpoints** (12 available)
+```
+GET     /api/batches/                      # List all (paginated, FIFO order)
+POST    /api/batches/                      # Create new batch
+GET     /api/batches/{id}/                 # Get details
+PUT/PATCH /api/batches/{id}/               # Update batch
+DELETE  /api/batches/{id}/                 # Delete batch
+GET     /api/batches/expiring/             # Batches expiring within N days
+GET     /api/batches/expired/              # All expired batches
+GET     /api/batches/out-of-stock/         # Zero quantity batches
+GET     /api/batches/by-ingredient/{id}/   # Batches for ingredient (FIFO)
+POST    /api/batches/{id}/consume/         # Consume from batch
+POST    /api/batches/update-expiry-status/ # Update all expiry statuses
+```
+
+#### 5. **Permissions**
+- **View:** All authenticated users (Manager, Storekeeper, Baker)
+- **Create/Update:** Storekeeper, Manager
+- **Delete:** Manager primarily
+- **Consume:** Storekeeper, Manager
+
+#### 6. **Features**
+✅ FIFO ordering (oldest expiry first)  
+✅ Expiry date tracking with alerts  
+✅ Consumption tracking & amount validation  
+✅ Cost per unit tracking  
+✅ Batch status management  
+✅ Advanced filtering (ingredient, status, expiry)  
+✅ Signal-based quantity syncing  
+✅ Soft delete support  
+
+#### 7. **Testing**
+✅ 30+ comprehensive test cases  
+✅ CRUD operations verified  
+✅ Custom actions tested  
+✅ Permission checks validated  
+✅ Quantity sync confirmed  
+✅ FIFO ordering verified  
+
+**54 Batches Seeded:**
+- 3 per ingredient × 18 ingredients
+- Mix of Active (36), Expired (18)
+- Varying quantities and dates
+
+**Documentation:** [TESTING_GUIDE_TASK_3_3.md](TESTING_GUIDE_TASK_3_3.md)
 
 ---
 
-## 📈 Development Progress
+## 🎯 Next Steps (Task 3.4)
 
-### Phase 3 Milestones
+### Wastage Management (3 hours)
 
-**Completed (5 hours)**
-- ✅ Category model & API (3 hrs)
-- ✅ Ingredient model & API (2+ hrs)
-- ✅ Testing & documentation (shared)
+**Deliverables:**
+1. **WastageReason Model**
+   - Predefined reasons (Expired, Damaged, Spilled, Theft, etc.)
+   - Seed data: 8-10 common wastage reasons
 
-**In Progress (0 hrs)**
-- 📋 Task 3.3 - Batches (4 hrs est.)
-- 📋 Task 3.4 - Wastage (3 hrs est.)
-- 📋 Task 3.5 - Recipes & Products (5 hrs est.)
-- 📋 Task 3.6 - Sales & Billing (5 hrs est.)
+2. **ProductWastage & IngredientWastage Models**
+   - Link to product/ingredient
+   - Quantity wasted
+   - Unit cost
+   - Total loss (qty × cost)
+   - Reason reference
+   - Reporter user
+   - Notes/description
 
-**Total Phase 3:** 19+ hours remaining (24 - 5 = 19)
+3. **Wastage API Endpoints**
+   - CRUD for both product and ingredient wastage
+   - Filter by reason, date range, amount
+   - Analytics: total loss, by reason, by date trend
+
+4. **Integration**
+   - Auto-create stock history entries
+   - Update ingredient/product quantities
+   - Trigger notifications for high wastage
+
+5. **Testing**
+   - Wastage creation & deletion
+   - Quantity updates
+   - Financial loss calculations
+   - Permission checks
+
+**Estimated Timeline:** 3 hours (including testing)
 
 ---
 
@@ -393,17 +466,23 @@ git add .
 git commit -m "feat(backend): Ingredient model with stock tracking & API endpoints"
 ```
 
+**For Task 3.3:**
+```bash
+git add .
+git commit -m "feat(backend): IngredientBatch model with FIFO logic & signal integration"
+```
+
 **For Testing:**
 ```bash
 git add .
-git commit -m "docs(backend): Add comprehensive testing guides for Categories & Ingredients"
+git commit -m "docs(backend): Add comprehensive testing guides for all models"
 ```
 
 ---
 
 ## 🚀 Production Readiness Checklist
 
-### Phase 3 Progress (22%)
+### Phase 3 Progress (33%)
 - [ ] All CRUD endpoints
 - [ ] Permission-based access control
 - [ ] Comprehensive error handling
