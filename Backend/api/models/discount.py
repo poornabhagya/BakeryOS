@@ -234,10 +234,12 @@ class Discount(models.Model):
             amount: Original amount (price, total, etc.)
             
         Returns:
-            float: Discount amount in Rs
+            Decimal: Discount amount in Rs
         """
+        from decimal import Decimal
+        
         if self.discount_type == 'Percentage':
-            return float(amount) * (float(self.value) / 100)
+            return Decimal(str(amount)) * (Decimal(str(self.value)) / 100)
         elif self.discount_type == 'FixedAmount':
-            return float(self.value)
-        return 0
+            return Decimal(str(self.value))
+        return Decimal('0')

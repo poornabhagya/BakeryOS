@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from api.views import LoginView, LogoutView, MeView
-from api.views import UserViewSet, CategoryViewSet, IngredientViewSet, BatchViewSet, ProductViewSet, RecipeViewSet, DiscountViewSet
+from api.views import UserViewSet, CategoryViewSet, IngredientViewSet, BatchViewSet, ProductViewSet, RecipeViewSet, DiscountViewSet, SaleViewSet
 
 # Create router for viewsets
 router = DefaultRouter()
@@ -12,6 +12,7 @@ router.register(r'batches', BatchViewSet, basename='batch')
 router.register(r'products', ProductViewSet, basename='product')
 router.register(r'recipes', RecipeViewSet, basename='recipe')
 router.register(r'discounts', DiscountViewSet, basename='discount')
+router.register(r'sales', SaleViewSet, basename='sale')
 
 app_name = 'api'
 
@@ -67,3 +68,25 @@ urlpatterns = auth_patterns + router.urls
 # GET    /api/ingredients/by-category/         - Get ingredients by category
 # GET    /api/ingredients/{id}/history/        - Get stock history (after IngredientStockHistory)
 # POST   /api/ingredients/{id}/reset-quantity/ - Reset quantity (Manager)
+#
+# DISCOUNTS:
+# GET    /api/discounts/                       - List discounts
+# POST   /api/discounts/                       - Create discount (Manager)
+# GET    /api/discounts/{id}/                  - Get discount details
+# PUT    /api/discounts/{id}/                  - Update discount (Manager)
+# PATCH  /api/discounts/{id}/                  - Partial update (Manager)
+# DELETE /api/discounts/{id}/                  - Delete discount (Manager)
+# GET    /api/discounts/{id}/applicable/       - Check if discount applicable (Manager)
+# GET    /api/discounts/calculate-amount/      - Calculate discount amount (Manager)
+#
+# SALES:
+# GET    /api/sales/                           - List sales (Manager sees all, Cashier sees own)
+# POST   /api/sales/                           - Create sale/checkout (Cashier)
+# GET    /api/sales/{id}/                      - Get sale details
+# GET    /api/sales/active/                    - Get today's sales
+# GET    /api/sales/date-range/                - Filter sales by date range
+# GET    /api/sales/cashier/{cashier_id}/      - Get sales by specific cashier (Manager)
+# GET    /api/sales/payment-method/            - Get sales breakdown by payment method
+# GET    /api/sales/analytics/                 - Get sales analytics (Manager)
+# GET    /api/sales/{id}/items/                - Get items in a sale
+

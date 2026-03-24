@@ -1,0 +1,18 @@
+﻿python : Using existing test database for alias 'default'...
+At line:1 char:60
++ ... \Backend" ; python manage.py test api.tests.test_sale_endpoints.SaleE ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Using existing ...as 'default'... 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.467s
+
+OK
+Preserving test database for alias 'default'...
+
+Found 1 test(s).
+System check identified no issues (0 silenced).
