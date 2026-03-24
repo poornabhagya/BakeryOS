@@ -425,7 +425,7 @@ GET    /api/recipes/{id}/batch_required/   - Calculate ingredients for batch ✓
 ## 💳 PHASE 4: POS & SALES (Week 2-3)
 
 ### Task 4.1: Implement Discount Model
-**Status:** NOT STARTED  
+**Status:** ✅ COMPLETE  
 **Complexity:** Medium  
 **Time Est:** 3 hours
 
