@@ -1,0 +1,454 @@
+﻿python : Using existing test database for alias 'default' 
+('file:memorydb_default?mode=memory&cache=shared')...
+At line:1 char:60
++ ... \Backend" ; python manage.py test api.tests.test_sale_endpoints --kee ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Using existing ...che=shared')... 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Found 32 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: corsheaders, drf_spectacular, messages, rest_framework, staticfiles
+  Apply all migrations: admin, api, auth, authtoken, contenttypes, sessions
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0001_initial... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying api.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying api.0002_user_created_at_user_updated_at_and_more... OK
+  Applying api.0003_alter_user_status... OK
+  Applying api.0004_category... OK
+  Applying api.0005_ingredient... OK
+  Applying api.0006_ingredientbatch... OK
+  Applying api.0007_product... OK
+  Applying api.0008_recipeitem_and_more... OK
+  Applying api.0009_discount... OK
+  Applying api.0010_sale_saleitem_sale_api_sale_bill_nu_ab6ba0_idx_and_more... OK
+  Applying api.0011_productstockhistory... OK
+  Applying authtoken.0001_initial... OK
+  Applying authtoken.0002_auto_20160226_1747... OK
+  Applying authtoken.0003_tokenproxy... OK
+test_create_sale_as_cashier 
+(api.tests.test_sale_endpoints.SaleAPITests.test_create_sale_as_cashier)
+Test creating a sale as cashier ... ok
+test_create_sale_creates_audit_trail (api.tests.test_sale_endpoints.SaleAPITest
+s.test_create_sale_creates_audit_trail)
+Test that creating a sale creates ProductStockHistory entries ... ok
+test_create_sale_deducts_stock 
+(api.tests.test_sale_endpoints.SaleAPITests.test_create_sale_deducts_stock)
+Test that creating a sale deducts from product stock ... ok
+test_create_sale_invalid_items_empty (api.tests.test_sale_endpoints.SaleAPITest
+s.test_create_sale_invalid_items_empty)
+Test creating sale with empty items list fails ... ok
+test_create_sale_invalid_items_too_many (api.tests.test_sale_endpoints.SaleAPIT
+ests.test_create_sale_invalid_items_too_many)
+Test creating sale with too many items fails ... ok
+test_create_sale_multiple_items 
+(api.tests.test_sale_endpoints.SaleAPITests.test_create_sale_multiple_items)
+Test creating a sale with multiple items ... ERROR
+test_create_sale_only_cashier_can_create (api.tests.test_sale_endpoints.SaleAPI
+Tests.test_create_sale_only_cashier_can_create)
+Test that only Cashier can create sales ... ok
+test_create_sale_with_discount 
+(api.tests.test_sale_endpoints.SaleAPITests.test_create_sale_with_discount)
+Test creating a sale with discount ... ERROR
+test_get_active_sales 
+(api.tests.test_sale_endpoints.SaleAPITests.test_get_active_sales)
+Test getting today's sales ... ok
+test_get_analytics_data 
+(api.tests.test_sale_endpoints.SaleAPITests.test_get_analytics_data)
+Test analytics endpoint returns correct data ... ERROR
+test_get_analytics_manager_only 
+(api.tests.test_sale_endpoints.SaleAPITests.test_get_analytics_manager_only)
+Test that analytics endpoint is manager only ... ok
+test_get_cashier_sales 
+(api.tests.test_sale_endpoints.SaleAPITests.test_get_cashier_sales)
+Test getting specific cashier's sales ... ERROR
+test_get_sale_detail 
+(api.tests.test_sale_endpoints.SaleAPITests.test_get_sale_detail)
+Test retrieving sale detail ... ok
+test_get_sales_by_date_range 
+(api.tests.test_sale_endpoints.SaleAPITests.test_get_sales_by_date_range)
+Test filtering sales by date range ... ok
+test_get_sales_by_payment_method 
+(api.tests.test_sale_endpoints.SaleAPITests.test_get_sales_by_payment_method)
+Test filtering sales by payment method ... ok
+test_list_sales_all_as_manager 
+(api.tests.test_sale_endpoints.SaleAPITests.test_list_sales_all_as_manager)
+Test that manager can see all sales ... ok
+test_list_sales_own_as_cashier 
+(api.tests.test_sale_endpoints.SaleAPITests.test_list_sales_own_as_cashier)
+Test that cashier can only see own sales ... ok
+test_sale_uses_request_cashier_if_not_provided (api.tests.test_sale_endpoints.S
+aleAPITests.test_sale_uses_request_cashier_if_not_provided)
+Test that sale uses request.user as cashier if not provided ... ok
+test_sale_item_creation 
+(api.tests.test_sale_endpoints.SaleItemModelTests.test_sale_item_creation)
+Test basic SaleItem creation ... ok
+test_sale_item_decimal_quantities (api.tests.test_sale_endpoints.SaleItemModelT
+ests.test_sale_item_decimal_quantities)
+Test SaleItem with decimal quantities (e.g., bulk items) ... ok
+test_sale_item_subtotal_calculation (api.tests.test_sale_endpoints.SaleItemMode
+lTests.test_sale_item_subtotal_calculation)
+Test that subtotal is auto-calculated ... ok
+test_sale_items_cascade_delete (api.tests.test_sale_endpoints.SaleItemModelTest
+s.test_sale_items_cascade_delete)
+Test that items are deleted when sale is deleted ... ok
+test_sale_bill_number_sequential 
+(api.tests.test_sale_endpoints.SaleModelTests.test_sale_bill_number_sequential)
+Test that bill numbers are sequential ... ok
+test_sale_creation_with_auto_bill_number (api.tests.test_sale_endpoints.SaleMod
+elTests.test_sale_creation_with_auto_bill_number)
+Test that bill_number is auto-generated ... ok
+test_sale_payment_methods 
+(api.tests.test_sale_endpoints.SaleModelTests.test_sale_payment_methods)
+Test all payment methods ... ok
+test_sale_timestamps 
+(api.tests.test_sale_endpoints.SaleModelTests.test_sale_timestamps)
+Test that timestamps are set correctly ... ok
+test_sale_with_discount 
+(api.tests.test_sale_endpoints.SaleModelTests.test_sale_with_discount)
+Test sale with discount ... ok
+test_sale_with_notes 
+(api.tests.test_sale_endpoints.SaleModelTests.test_sale_with_notes)
+Test sale with optional notes ... ok
+test_sale_with_insufficient_stock (api.tests.test_sale_endpoints.SaleEdgeCaseTe
+sts.test_sale_with_insufficient_stock)
+Test creating sale with insufficient stock doesn't prevent creation ... ok
+test_sale_with_invalid_price 
+(api.tests.test_sale_endpoints.SaleEdgeCaseTests.test_sale_with_invalid_price)
+Test creating sale with invalid price ... ok
+test_sale_with_invalid_quantity (api.tests.test_sale_endpoints.SaleEdgeCaseTest
+s.test_sale_with_invalid_quantity)
+Test creating sale with invalid quantity ... ok
+test_sale_with_non_existent_product (api.tests.test_sale_endpoints.SaleEdgeCase
+Tests.test_sale_with_non_existent_product)
+Test creating sale with non-existent product ... ok
+
+======================================================================
+ERROR: test_create_sale_multiple_items 
+(api.tests.test_sale_endpoints.SaleAPITests.test_create_sale_multiple_items)
+Test creating a sale with multiple items
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Projects\campus 
+project\BakeryOS_Project\Backend\api\tests\test_sale_endpoints.py", line 426, 
+in test_create_sale_multiple_items
+    self.assertEqual(response.data['item_count'], 2)
+                     ~~~~~~~~~~~~~^^^^^^^^^^^^^^
+KeyError: 'item_count'
+
+======================================================================
+ERROR: test_create_sale_with_discount 
+(api.tests.test_sale_endpoints.SaleAPITests.test_create_sale_with_discount)
+Test creating a sale with discount
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Projects\campus 
+project\BakeryOS_Project\Backend\api\tests\test_sale_endpoints.py", line 341, 
+in test_create_sale_with_discount
+    response = self.client.post('/api/sales/', data, format='json')
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 296, in post
+    response = super().post(
+        path, data=data, format=format, content_type=content_type, **extra)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 210, in post
+    return self.generic('POST', path, data, content_type, **extra)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 234, in generic
+    return super().generic(
+           ~~~~~~~~~~~~~~~^
+        method, path, data, content_type, secure, **extra)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\test\client.py", line 671, in generic
+    return self.request(**r)
+           ~~~~~~~~~~~~^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 286, in request
+    return super().request(**kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 238, in request
+    request = super().request(**kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\test\client.py", line 1087, in request
+    self.check_exception(response)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\test\client.py", line 802, in check_exception
+    raise exc_value
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Projects\campus 
+project\BakeryOS_Project\Backend\api\views\sale_views.py", line 126, in create
+    sale = serializer.save()
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\serializers.py", line 212, in save
+    self.instance = self.create(validated_data)
+                    ~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus 
+project\BakeryOS_Project\Backend\api\serializers\sale_serializers.py", line 
+210, in create
+    sale = Sale.objects.create(
+        cashier_id=validated_data['cashier_id'],
+    ...<4 lines>...
+        notes=validated_data.get('notes', ''),
+    )
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\query.py", line 667, in create
+    obj = self.model(**kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\base.py", line 566, in __init__
+    _setattr(self, field.name, rel_obj)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\fields\related_descriptors.py", line 287, in __set__
+    raise ValueError(
+    ...<7 lines>...
+    )
+ValueError: Cannot assign "1": "Sale.discount_id" must be a "Discount" 
+instance.
+
+======================================================================
+ERROR: test_get_analytics_data 
+(api.tests.test_sale_endpoints.SaleAPITests.test_get_analytics_data)
+Test analytics endpoint returns correct data
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Projects\campus 
+project\BakeryOS_Project\Backend\api\tests\test_sale_endpoints.py", line 664, 
+in test_get_analytics_data
+    response = self.client.get('/api/sales/analytics/?period=today')
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 289, in get
+    response = super().get(path, data=data, **extra)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 206, in get
+    return self.generic('GET', path, **r)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 234, in generic
+    return super().generic(
+           ~~~~~~~~~~~~~~~^
+        method, path, data, content_type, secure, **extra)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\test\client.py", line 671, in generic
+    return self.request(**r)
+           ~~~~~~~~~~~~^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 286, in request
+    return super().request(**kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 238, in request
+    request = super().request(**kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\test\client.py", line 1087, in request
+    self.check_exception(response)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\test\client.py", line 802, in check_exception
+    raise exc_value
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Projects\campus 
+project\BakeryOS_Project\Backend\api\views\sale_views.py", line 251, in 
+get_analytics
+    overall_stats = sales.aggregate(
+        total_sales=Count('id'),
+    ...<2 lines>...
+        total_discount=Sum('discount_amount')
+    )
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\query.py", line 594, in aggregate
+    return self.query.chain().get_aggregation(self.db, kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\sql\query.py", line 472, in get_aggregation
+    aggregate = aggregate_expr.resolve_expression(
+        self, allow_joins=True, reuse=None, summarize=True
+    )
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\aggregates.py", line 127, in resolve_expression
+    raise FieldError(
+        f"Cannot compute {c.name}('{ref}'): '{ref}' is an aggregate"
+    )
+  Applying sessions.0001_initial... OK
+System check identified no issues (0 silenced).
+django.core.exceptions.FieldError: Cannot compute Avg('total_amount'): 
+'total_amount' is an aggregate
+
+======================================================================
+ERROR: test_get_cashier_sales 
+(api.tests.test_sale_endpoints.SaleAPITests.test_get_cashier_sales)
+Test getting specific cashier's sales
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Projects\campus 
+project\BakeryOS_Project\Backend\api\tests\test_sale_endpoints.py", line 689, 
+in test_get_cashier_sales
+    response = self.client.get(f'/api/sales/cashier/{self.cashier1.id}/')
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 289, in get
+    response = super().get(path, data=data, **extra)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 206, in get
+    return self.generic('GET', path, **r)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 234, in generic
+    return super().generic(
+           ~~~~~~~~~~~~~~~^
+        method, path, data, content_type, secure, **extra)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\test\client.py", line 671, in generic
+    return self.request(**r)
+           ~~~~~~~~~~~~^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 286, in request
+    return super().request(**kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\test.py", line 238, in request
+    request = super().request(**kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\test\client.py", line 1087, in request
+    self.check_exception(response)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\test\client.py", line 802, in check_exception
+    raise exc_value
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\core\handlers\base.py", line 198, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "C:\Projects\campus 
+project\BakeryOS_Project\Backend\api\views\sale_views.py", line 190, in 
+cashier_sales
+    stats = sales.aggregate(
+        total_sales=Count('id'),
+    ...<2 lines>...
+        total_discount=Sum('discount_amount')
+    )
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\query.py", line 594, in aggregate
+    return self.query.chain().get_aggregation(self.db, kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\sql\query.py", line 472, in get_aggregation
+    aggregate = aggregate_expr.resolve_expression(
+        self, allow_joins=True, reuse=None, summarize=True
+    )
+  File "C:\Projects\campus project\BakeryOS_Project\Backend\venv\Lib\site-packa
+ges\django\db\models\aggregates.py", line 127, in resolve_expression
+    raise FieldError(
+        f"Cannot compute {c.name}('{ref}'): '{ref}' is an aggregate"
+    )
+django.core.exceptions.FieldError: Cannot compute Avg('total_amount'): 
+'total_amount' is an aggregate
+
+----------------------------------------------------------------------
+Ran 32 tests in 46.434s
+
+FAILED (errors=4)
+Preserving test database for alias 'default' 
+('file:memorydb_default?mode=memory&cache=shared')...
+

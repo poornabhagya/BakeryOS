@@ -218,3 +218,104 @@ class Product(models.Model):
             ingredient_id=ingredient,
             status='Active'
         ).order_by('-created_at')
+
+
+class ProductStockHistory(models.Model):
+    """
+    Audit trail for product stock changes.
+    
+    Tracks all stock modifications including:
+    - Sales (UseStock)
+    - Returns (ReturnStock)
+    - Adjustments (StockAdjustment)
+    - Waste (WasteStock)
+    
+    Features:
+    - Links to Product and User (cashier/storekeeper who made the change)
+    - Records before/after quantities
+    - Optional reference to Sale or other transactions
+    - Timestamp for audit trail
+    """
+    
+    TRANSACTION_TYPES = [
+        ('AddStock', 'Add Stock (Production/Batch)'),
+        ('UseStock', 'Use Stock (Sale)'),
+        ('ReturnStock', 'Return Stock (Product Return)'),
+        ('WasteStock', 'Waste Stock (Spoilage/Damage)'),
+        ('StockAdjustment', 'Stock Adjustment (Inventory Correction)'),
+    ]
+    
+    product_id = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='stock_history',
+        db_index=True
+    )
+    
+    transaction_type = models.CharField(
+        max_length=20,
+        choices=TRANSACTION_TYPES,
+        db_index=True,
+        help_text="Type of stock change"
+    )
+    
+    qty_before = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Stock quantity before transaction"
+    )
+    
+    qty_after = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Stock quantity after transaction"
+    )
+    
+    change_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Change in quantity (positive for additions, negative for removals)"
+    )
+    
+    # Reference fields for traceability
+    user_id = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='stock_history',
+        help_text="User who made the change (cashier, storekeeper, etc.)"
+    )
+    
+    # Optional reference to sales transaction
+    sale_bill_number = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Bill number if this is from a sale"
+    )
+    
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional details about the transaction"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True
+    )
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['product_id', '-created_at']),
+            models.Index(fields=['transaction_type', '-created_at']),
+            models.Index(fields=['sale_bill_number']),
+        ]
+        verbose_name = 'Product Stock History'
+        verbose_name_plural = 'Product Stock Histories'
+    
+    def __str__(self):
+        return f"{self.product_id.name} - {self.transaction_type} ({self.change_amount}) at {self.created_at}"
