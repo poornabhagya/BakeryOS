@@ -499,7 +499,7 @@ def is_discount_applicable(discount, product, current_datetime):
 ---
 
 ### Task 4.2: Implement Sales & Sale Items Models
-**Status:** NOT STARTED  
+**Status:** ✅ COMPLETED  
 **Complexity:** Medium  
 **Time Est:** 4 hours
 

@@ -52,6 +52,16 @@ from .discount_serializers import (
     DiscountValidationSerializer,
     DiscountApplySerializer,
 )
+from .sale_serializers import (
+    SaleItemSerializer,
+    SaleListSerializer,
+    SaleDetailSerializer,
+    SaleItemCreateSerializer,
+    SaleCreateSerializer,
+    SaleAnalyticsSerializer,
+    CashierSalesSerializer,
+    PaymentMethodSalesSerializer,
+)
 
 __all__ = [
     'LoginSerializer',
@@ -92,4 +102,12 @@ __all__ = [
     'DiscountCreateSerializer',
     'DiscountValidationSerializer',
     'DiscountApplySerializer',
+    'SaleItemSerializer',
+    'SaleListSerializer',
+    'SaleDetailSerializer',
+    'SaleItemCreateSerializer',
+    'SaleCreateSerializer',
+    'SaleAnalyticsSerializer',
+    'CashierSalesSerializer',
+    'PaymentMethodSalesSerializer',
 ]
