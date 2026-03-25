@@ -70,6 +70,21 @@ from .sale_serializers import (
     CashierSalesSerializer,
     PaymentMethodSalesSerializer,
 )
+from .wastage_reason import (
+    WastageReasonListSerializer,
+    WastageReasonDetailSerializer,
+    WastageReasonCreateSerializer,
+)
+from .product_wastage import (
+    ProductWastageListSerializer,
+    ProductWastageDetailSerializer,
+    ProductWastageCreateSerializer,
+)
+from .ingredient_wastage import (
+    IngredientWastageListSerializer,
+    IngredientWastageDetailSerializer,
+    IngredientWastageCreateSerializer,
+)
 
 
 __all__ = [
@@ -125,4 +140,13 @@ __all__ = [
     'SaleAnalyticsSerializer',
     'CashierSalesSerializer',
     'PaymentMethodSalesSerializer',
+    'WastageReasonListSerializer',
+    'WastageReasonDetailSerializer',
+    'WastageReasonCreateSerializer',
+    'ProductWastageListSerializer',
+    'ProductWastageDetailSerializer',
+    'ProductWastageCreateSerializer',
+    'IngredientWastageListSerializer',
+    'IngredientWastageDetailSerializer',
+    'IngredientWastageCreateSerializer',
 ]
