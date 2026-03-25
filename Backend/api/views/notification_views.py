@@ -2,7 +2,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from django.utils import timezone
 
 from api.models import Notification, NotificationReceipt, User
@@ -13,6 +13,7 @@ from api.serializers import (
     NotificationCreateSerializer,
     NotificationStatsSerializer,
 )
+from api.utils.query_optimization import OptimizedQueryMixin
 
 
 class NotificationPagination(PageNumberPagination):
@@ -22,12 +23,12 @@ class NotificationPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class NotificationViewSet(viewsets.ModelViewSet):
+class NotificationViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
-    ViewSet for notifications
+    ViewSet for notifications with query optimization.
     
     Endpoints:
-    - GET /api/notifications/ - List my notifications
+    - GET /api/notifications/ - List my notifications (paginated)
     - GET /api/notifications/{id}/ - Get notification details
     - DELETE /api/notifications/{id}/ - Delete notification
     - PATCH /api/notifications/{id}/read/ - Mark as read
@@ -38,13 +39,25 @@ class NotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = NotificationPagination
     
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': [],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': [],
+            'prefetch_related': [],
+        }
+    }
+    
     def get_queryset(self):
         """Get notifications for current user"""
         user = self.request.user
         # Get all notifications where user has a receipt
         return Notification.objects.filter(
             receipts__user=user
-        ).distinct().order_by('-created_at')
+        ).select_related().distinct().order_by('-created_at')
     
     def get_serializer_class(self):
         """Choose serializer based on action"""

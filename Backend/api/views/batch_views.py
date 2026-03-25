@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
 from django.db.models import F, Q
 from django.utils import timezone
 from datetime import timedelta
@@ -16,11 +17,19 @@ from api.serializers import (
     BatchConsumeSerializer,
 )
 from api.permissions import IsManager, IsManagerOrStorekeeper, IsManagerOrStorekeeperOrBaker
+from api.utils.query_optimization import OptimizedQueryMixin
 
 
-class BatchViewSet(viewsets.ModelViewSet):
+class BatchPagination(PageNumberPagination):
+    """Custom pagination for batch list endpoints"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class BatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
-    ViewSet for IngredientBatch management.
+    ViewSet for IngredientBatch management with query optimization.
     
     Features:
     - Auto-generated batch_id (BATCH-1001, BATCH-1002, etc.)
@@ -28,6 +37,8 @@ class BatchViewSet(viewsets.ModelViewSet):
     - Expiry date management and alerts
     - Cost tracking for financial reporting
     - Automatic ingredient total_quantity sync
+    - Query optimized with select_related/prefetch_related
+    - Pagination on list endpoints
     
     Endpoints:
     - GET    /api/batches/                  List all batches (paginated, filtered)
@@ -56,8 +67,25 @@ class BatchViewSet(viewsets.ModelViewSet):
     - Cashier & Others: No access
     """
     
-    queryset = IngredientBatch.objects.all().select_related('ingredient_id').order_by('expire_date')
+    queryset = IngredientBatch.objects.all()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    pagination_class = BatchPagination
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': ['ingredient'],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': ['ingredient'],
+            'prefetch_related': ['stock_history'],
+        },
+        'expiring': {
+            'select_related': ['ingredient'],
+            'prefetch_related': [],
+        }
+    }
     filterset_fields = ['ingredient_id', 'status']
     search_fields = ['batch_id', 'ingredient_id__name']
     ordering_fields = ['made_date', 'expire_date', 'current_qty', 'status', 'created_at']

@@ -6,6 +6,7 @@ from django.db.models import F, Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.pagination import PageNumberPagination
 
 from api.models import Product, Category
 from api.serializers import (
@@ -16,9 +17,17 @@ from api.serializers import (
     ProductFilterSerializer,
 )
 from api.permissions import IsManager, IsManagerOrReadOnly
+from api.utils.query_optimization import OptimizedQueryMixin, StandardPagination
 
 
-class ProductViewSet(viewsets.ModelViewSet):
+class ProductPagination(PageNumberPagination):
+    """Custom pagination for product list endpoints"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
     ViewSet for Product management (bakery items).
     
@@ -29,6 +38,8 @@ class ProductViewSet(viewsets.ModelViewSet):
     - Stock management and low-stock alerts
     - Search and filtering capabilities
     - Recipe linkage for production
+    - Query optimized with select_related/prefetch_related
+    - Pagination on all list endpoints
     
     Endpoints:
     - GET /api/products/ - List products (paginated, filtered, ordered)
@@ -51,7 +62,31 @@ class ProductViewSet(viewsets.ModelViewSet):
     
     queryset = Product.objects.all()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    pagination_class = None
+    pagination_class = ProductPagination
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': ['category'],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': ['category'],
+            'prefetch_related': ['batches', 'stock_history'],
+        },
+        'low_stock': {
+            'select_related': ['category'],
+            'prefetch_related': [],
+        },
+        'out_of_stock': {
+            'select_related': ['category'],
+            'prefetch_related': [],
+        },
+        'by_category': {
+            'select_related': ['category'],
+            'prefetch_related': [],
+        }
+    }
     
     # Filter configuration
     filterset_fields = ['category_id']  # 'status' is a @property, not a DB field

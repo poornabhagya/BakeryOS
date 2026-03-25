@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
 from django.db.models import Q
@@ -14,11 +15,19 @@ from api.serializers.stock_history_serializer import (
     IngredientStockHistoryListSerializer,
     IngredientStockHistoryDetailSerializer
 )
+from api.utils.query_optimization import OptimizedQueryMixin
 
 
-class ProductStockHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+class StockHistoryPagination(PageNumberPagination):
+    """Custom pagination for stock history list endpoints"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class ProductStockHistoryViewSet(OptimizedQueryMixin, viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for viewing product stock history (audit trail).
+    ViewSet for viewing product stock history (audit trail) with query optimization.
     
     Provides read-only access to all product stock transactions
     including sales, batch additions, wastage, and adjustments.
@@ -29,13 +38,27 @@ class ProductStockHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     - List and detail views
     - Pagination support
     - Ordering support
+    - Query optimized with select_related/prefetch_related
     """
     
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
+    pagination_class = StockHistoryPagination
     filterset_fields = ['product_id', 'transaction_type']
     ordering = ['-created_at']
     ordering_fields = ['created_at', 'change_amount', 'qty_before']
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': ['product', 'performed_by'],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': ['product', 'performed_by'],
+            'prefetch_related': [],
+        }
+    }
     
     def get_queryset(self):
         """Get stock history with filters applied"""
@@ -140,9 +163,9 @@ class ProductStockHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(summary)
 
 
-class IngredientStockHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+class IngredientStockHistoryViewSet(OptimizedQueryMixin, viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for viewing ingredient stock history (audit trail).
+    ViewSet for viewing ingredient stock history (audit trail) with query optimization.
     
     Provides read-only access to all ingredient stock transactions
     including batch additions, usage, wastage, and adjustments.
@@ -153,13 +176,27 @@ class IngredientStockHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     - Pagination support
     - Ordering support
     - Summary by transaction type
+    - Query optimized with select_related/prefetch_related
     """
     
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
+    pagination_class = StockHistoryPagination
     filterset_fields = ['ingredient_id', 'batch_id', 'transaction_type']
     ordering = ['-created_at']
     ordering_fields = ['created_at', 'change_amount', 'qty_before']
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': ['ingredient', 'batch', 'performed_by'],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': ['ingredient', 'batch', 'performed_by'],
+            'prefetch_related': [],
+        }
+    }
     
     def get_queryset(self):
         """Get stock history with filters applied"""

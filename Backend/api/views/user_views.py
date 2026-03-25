@@ -7,6 +7,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth import get_user_model
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -19,16 +20,24 @@ from api.serializers.user_serializers import (
     UserStatusSerializer,
     UserMinimalSerializer
 )
+from api.utils.query_optimization import OptimizedQueryMixin
 
 User = get_user_model()
 
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserPagination(PageNumberPagination):
+    """Custom pagination for user list endpoints"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class UserViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
-    Complete User Management API
+    Complete User Management API with query optimization
     
     Endpoints:
-    - GET /api/users/ (list all users - Manager only)
+    - GET /api/users/ (list all users - Manager only, paginated)
     - POST /api/users/ (create user - Manager only)
     - GET /api/users/{id}/ (get user details)
     - PUT /api/users/{id}/ (update user - Manager or self)
@@ -47,6 +56,20 @@ class UserViewSet(viewsets.ModelViewSet):
     
     queryset = User.objects.all()
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    pagination_class = UserPagination
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': [],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': [],
+            'prefetch_related': [],
+        }
+    }
+    
     filterset_fields = ['role', 'status']
     search_fields = ['username', 'full_name', 'email', 'employee_id', 'contact']
     ordering_fields = ['id', 'username', 'created_at', 'full_name', 'employee_id']

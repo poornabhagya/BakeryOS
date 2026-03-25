@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 
 from api.models import Category
@@ -13,14 +14,28 @@ from api.serializers import (
     CategoryCreateSerializer,
     CategoryUpdateSerializer,
 )
+from api.utils.query_optimization import OptimizedQueryMixin
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
+class CategoryPagination(PageNumberPagination):
+    """Custom pagination for category list endpoints"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class CategoryViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
     ViewSet for Category management.
     
+    Features:
+    - Pagination on list endpoints
+    - Query optimized with select_related/prefetch_related
+    - Filtering by type (Product/Ingredient)
+    - Search capability
+    
     Endpoints:
-    - GET    /api/categories/              List all categories
+    - GET    /api/categories/              List all categories (paginated)
     - POST   /api/categories/              Create new category (Manager only)
     - GET    /api/categories/{id}/         Get category details
     - PUT    /api/categories/{id}/         Update category (Manager only)
@@ -31,6 +46,23 @@ class CategoryViewSet(viewsets.ModelViewSet):
     
     queryset = Category.objects.all()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    pagination_class = CategoryPagination
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': [],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': [],
+            'prefetch_related': [],
+        },
+        'by_type': {
+            'select_related': [],
+            'prefetch_related': [],
+        }
+    }
     
     # Filter by type
     filterset_fields = ['type']

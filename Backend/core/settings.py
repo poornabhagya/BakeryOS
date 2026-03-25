@@ -100,6 +100,34 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://localhost:3000').split(',')
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173,http://localhost:3000').split(',')
 
+# Caching Configuration (Database + Memory Fallback)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'bakeryos-cache',
+        'TIMEOUT': 300,  # 5 minutes default timeout
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+        }
+    },
+    'dashboard': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'bakeryos-dashboard-cache',
+        'TIMEOUT': 900,  # 15 minutes for dashboard data
+        'OPTIONS': {
+            'MAX_ENTRIES': 500,
+        }
+    },
+    'analytics': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'bakeryos-analytics-cache',
+        'TIMEOUT': 3600,  # 1 hour for analytics data
+        'OPTIONS': {
+            'MAX_ENTRIES': 200,
+        }
+    }
+}
+
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
