@@ -15,26 +15,7 @@ from api.serializers import (
     ProductSearchSerializer,
     ProductFilterSerializer,
 )
-from api.permissions import IsManager
-
-
-class IsManagerOnly(IsAuthenticated):
-    """Permission: Manager only (full CRUD)"""
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        return request.user.role == 'Manager'
-
-
-class IsManagerOrReadOnly(IsAuthenticated):
-    """Permission: Manager for write, anyone for read"""
-    def has_permission(self, request, view):
-        return super().has_permission(request, view)
-
-    def has_object_permission(self, request, view, obj):
-        if request.method in ['GET', 'HEAD', 'OPTIONS']:
-            return True
-        return request.user.role == 'Manager'
+from api.permissions import IsManager, IsManagerOrReadOnly
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -99,7 +80,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         elif self.action in ['create', 'update', 'partial_update', 'destroy']:
             # Write endpoints: Manager only
-            return [IsManagerOnly()]
+            return [IsManager()]
         return [IsAuthenticated()]
     
     # ========== STANDARD CRUD ENDPOINTS ==========
