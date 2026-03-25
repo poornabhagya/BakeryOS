@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from api.views import LoginView, LogoutView, MeView
-from api.views import UserViewSet, CategoryViewSet, IngredientViewSet, BatchViewSet, ProductViewSet, ProductBatchViewSet, RecipeViewSet, DiscountViewSet, SaleViewSet, WastageReasonViewSet, ProductWastageViewSet, IngredientWastageViewSet
+from api.views import UserViewSet, CategoryViewSet, IngredientViewSet, BatchViewSet, ProductViewSet, ProductBatchViewSet, RecipeViewSet, DiscountViewSet, SaleViewSet, WastageReasonViewSet, ProductWastageViewSet, IngredientWastageViewSet, ProductStockHistoryViewSet, IngredientStockHistoryViewSet, NotificationViewSet
 
 # Create router for viewsets
 router = DefaultRouter()
@@ -17,6 +17,9 @@ router.register(r'sales', SaleViewSet, basename='sale')
 router.register(r'wastage-reasons', WastageReasonViewSet, basename='wastage-reason')
 router.register(r'product-wastages', ProductWastageViewSet, basename='product-wastage')
 router.register(r'ingredient-wastages', IngredientWastageViewSet, basename='ingredient-wastage')
+router.register(r'product-stock-history', ProductStockHistoryViewSet, basename='product-stock-history')
+router.register(r'ingredient-stock-history', IngredientStockHistoryViewSet, basename='ingredient-stock-history')
+router.register(r'notifications', NotificationViewSet, basename='notification')
 
 app_name = 'api'
 
