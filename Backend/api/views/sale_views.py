@@ -2,21 +2,30 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, Avg, Q
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Sum, Count, Avg, Q, Prefetch
 from django.utils import timezone
 from datetime import datetime, timedelta
 from api.models import Sale, SaleItem, User
 from api.serializers import SaleListSerializer, SaleDetailSerializer, SaleCreateSerializer
 from api.serializers import SaleAnalyticsSerializer, CashierSalesSerializer, PaymentMethodSalesSerializer
 from api.permissions import IsCashierOrManager, IsCashier, IsManager
+from api.utils.query_optimization import OptimizedQueryMixin
 
 
-class SaleViewSet(viewsets.ModelViewSet):
+class SalePagination(PageNumberPagination):
+    """Custom pagination for sale list endpoints"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class SaleViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
-    ViewSet for Sale management
+    ViewSet for Sale management with query optimization.
     
     Endpoints:
-    - GET /api/sales/              - List all sales
+    - GET /api/sales/              - List all sales (paginated)
     - POST /api/sales/             - Create new sale (checkout)
     - GET /api/sales/{id}/         - Get sale details
     - GET /api/sales/active/       - Get today's sales
@@ -29,6 +38,19 @@ class SaleViewSet(viewsets.ModelViewSet):
     queryset = Sale.objects.all()
     serializer_class = SaleListSerializer
     permission_classes = [IsCashierOrManager]
+    pagination_class = SalePagination
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': ['cashier', 'discount'],
+            'prefetch_related': Prefetch('items', queryset=SaleItem.objects.select_related('product')),
+        },
+        'retrieve': {
+            'select_related': ['cashier', 'discount'],
+            'prefetch_related': Prefetch('items', queryset=SaleItem.objects.select_related('product')),
+        }
+    }
     
     def get_serializer_class(self):
         """Route to appropriate serializer based on action"""
@@ -53,7 +75,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
     
     def get_queryset(self):
-        """Filter sales based on user role"""
+        """Filter sales based on user role with optimized queries"""
         user = self.request.user
         queryset = Sale.objects.all()
         
@@ -89,7 +111,10 @@ class SaleViewSet(viewsets.ModelViewSet):
         if cashier_id and self.request.user.role == 'Manager':
             queryset = queryset.filter(cashier_id=cashier_id)
         
-        return queryset.prefetch_related('items', 'items__product_id')
+        # Apply optimized query patterns
+        return queryset.select_related('cashier', 'discount').prefetch_related(
+            Prefetch('items', queryset=SaleItem.objects.select_related('product'))
+        )
     
     def create(self, request, *args, **kwargs):
         """Create a new sale (checkout)"""

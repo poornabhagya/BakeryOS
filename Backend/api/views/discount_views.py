@@ -2,8 +2,9 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from datetime import datetime
 
 from api.models import Discount, Product, Category
@@ -15,11 +16,19 @@ from api.serializers import (
     DiscountApplySerializer,
 )
 from api.permissions import IsManager
+from api.utils.query_optimization import OptimizedQueryMixin
 
 
-class DiscountViewSet(viewsets.ModelViewSet):
+class DiscountPagination(PageNumberPagination):
+    """Custom pagination for discount list endpoints"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class DiscountViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
-    ViewSet for Discount management.
+    ViewSet for Discount management with query optimization.
     
     Features:
     - Full CRUD on discounts
@@ -29,7 +38,7 @@ class DiscountViewSet(viewsets.ModelViewSet):
     - Toggle active/inactive
     
     Endpoints:
-    - GET /api/discounts/ - List all discounts (Manager)
+    - GET /api/discounts/ - List all discounts (Manager, paginated)
     - POST /api/discounts/ - Create discount (Manager)
     - GET /api/discounts/{id}/ - Get discount details
     - PUT /api/discounts/{id}/ - Update discount (Manager)
@@ -46,6 +55,24 @@ class DiscountViewSet(viewsets.ModelViewSet):
     
     queryset = Discount.objects.all()
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    pagination_class = DiscountPagination
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': ['target_category', 'target_product'],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': ['target_category', 'target_product'],
+            'prefetch_related': [],
+        },
+        'active': {
+            'select_related': ['target_category', 'target_product'],
+            'prefetch_related': [],
+        }
+    }
+    
     search_fields = ['name', 'discount_id', 'description']
     ordering = ['-created_at']
     

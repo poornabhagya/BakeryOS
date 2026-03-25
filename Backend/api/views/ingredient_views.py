@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
 from django.db.models import F, Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -14,14 +15,22 @@ from api.serializers import (
     IngredientUpdateSerializer,
 )
 from api.permissions import IsManager, IsStorekeeper, IsBaker, IsManagerOrStorekeeper, IsManagerOrStorekeeperOrBaker
+from api.utils.query_optimization import OptimizedQueryMixin
 
 
-class IngredientViewSet(viewsets.ModelViewSet):
+class IngredientPagination(PageNumberPagination):
+    """Custom pagination for ingredient list endpoints"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
-    ViewSet for Ingredient management.
+    ViewSet for Ingredient management with query optimization.
     
     Endpoints:
-    - GET    /api/ingredients/              List all ingredients
+    - GET    /api/ingredients/              List all ingredients (paginated)
     - POST   /api/ingredients/              Create new ingredient
     - GET    /api/ingredients/{id}/         Get ingredient details
     - PUT    /api/ingredients/{id}/         Full update
@@ -42,6 +51,24 @@ class IngredientViewSet(viewsets.ModelViewSet):
     
     queryset = Ingredient.objects.filter(is_active=True)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    pagination_class = IngredientPagination
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': ['category'],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': ['category'],
+            'prefetch_related': ['batches', 'stock_history'],
+        },
+        'low_stock': {
+            'select_related': ['category'],
+            'prefetch_related': [],
+        }
+    }
+    
     filterset_fields = ['category_id', 'is_active']
     search_fields = ['ingredient_id', 'name', 'supplier']
     ordering_fields = ['name', 'category_id', 'total_quantity', 'created_at']

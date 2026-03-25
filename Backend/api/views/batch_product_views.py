@@ -2,7 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Q, Prefetch
 from django.utils import timezone
 from datetime import timedelta
 from api.models import ProductBatch, Product
@@ -15,14 +16,22 @@ from api.serializers import (
     ProductBatchExpiringSerializer,
 )
 from api.permissions import IsBaker, IsManagerOrBaker, IsManager, IsManagerOrStorekeeperOrBaker
+from api.utils.query_optimization import OptimizedQueryMixin
 
 
-class ProductBatchViewSet(viewsets.ModelViewSet):
+class ProductBatchPagination(PageNumberPagination):
+    """Custom pagination for product batch list endpoints"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class ProductBatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
-    ViewSet for Product Batch management.
+    ViewSet for Product Batch management with query optimization.
     
     Endpoints:
-    - GET    /api/product-batches/        - List all batches
+    - GET    /api/product-batches/        - List all batches (paginated)
     - POST   /api/product-batches/        - Create batch (Baker)
     - GET    /api/product-batches/{id}/   - Get batch details
     - PUT    /api/product-batches/{id}/   - Update batch (Baker/Manager)
@@ -38,8 +47,25 @@ class ProductBatchViewSet(viewsets.ModelViewSet):
     - Others: No access
     """
     
-    queryset = ProductBatch.objects.all().prefetch_related('product_id')
+    queryset = ProductBatch.objects.all()
     serializer_class = ProductBatchListSerializer
+    pagination_class = ProductBatchPagination
+    
+    # Query optimization profiles
+    optimized_relations = {
+        'list': {
+            'select_related': ['product'],
+            'prefetch_related': [],
+        },
+        'retrieve': {
+            'select_related': ['product'],
+            'prefetch_related': ['stock_history'],
+        },
+        'expiring': {
+            'select_related': ['product'],
+            'prefetch_related': [],
+        }
+    }
     
     def get_serializer_class(self):
         """Route to appropriate serializer based on action"""
