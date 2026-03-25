@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from api.views import LoginView, LogoutView, MeView
 from api.views import UserViewSet, CategoryViewSet, IngredientViewSet, BatchViewSet, ProductViewSet, ProductBatchViewSet, RecipeViewSet, DiscountViewSet, SaleViewSet, WastageReasonViewSet, ProductWastageViewSet, IngredientWastageViewSet, ProductStockHistoryViewSet, IngredientStockHistoryViewSet, NotificationViewSet
+from api.views.analytics_views import SalesAnalyticsViewSet, InventoryAnalyticsViewSet, DashboardKpiViewSet
 
 # Create router for viewsets
 router = DefaultRouter()
@@ -20,6 +21,9 @@ router.register(r'ingredient-wastages', IngredientWastageViewSet, basename='ingr
 router.register(r'product-stock-history', ProductStockHistoryViewSet, basename='product-stock-history')
 router.register(r'ingredient-stock-history', IngredientStockHistoryViewSet, basename='ingredient-stock-history')
 router.register(r'notifications', NotificationViewSet, basename='notification')
+router.register(r'analytics/sales', SalesAnalyticsViewSet, basename='sales-analytics')
+router.register(r'analytics/inventory', InventoryAnalyticsViewSet, basename='inventory-analytics')
+router.register(r'dashboard', DashboardKpiViewSet, basename='dashboard-kpi')
 
 app_name = 'api'
 
