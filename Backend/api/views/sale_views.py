@@ -8,35 +8,7 @@ from datetime import datetime, timedelta
 from api.models import Sale, SaleItem, User
 from api.serializers import SaleListSerializer, SaleDetailSerializer, SaleCreateSerializer
 from api.serializers import SaleAnalyticsSerializer, CashierSalesSerializer, PaymentMethodSalesSerializer
-
-
-class IsCashierOrManager(IsAuthenticated):
-    """Permission: Manager can view all sales, Cashier can view own sales"""
-    
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        
-        # Manager and Cashier roles have access
-        return request.user.role in ['Manager', 'Cashier']
-
-
-class IsCashier(IsAuthenticated):
-    """Permission: Only Cashier role"""
-    
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        return request.user.role == 'Cashier'
-
-
-class IsManagerOnly(IsAuthenticated):
-    """Permission: Only Manager role"""
-    
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        return request.user.role == 'Manager'
+from api.permissions import IsCashierOrManager, IsCashier, IsManager
 
 
 class SaleViewSet(viewsets.ModelViewSet):
@@ -77,7 +49,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return [IsCashierOrManager()]  # Both Cashier and Manager can create sales
         elif self.action in ['get_analytics', 'get_detailed_analytics']:
-            return [IsManagerOnly()]
+            return [IsManager()]
         return super().get_permissions()
     
     def get_queryset(self):
