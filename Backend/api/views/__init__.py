@@ -15,6 +15,8 @@ from .sale_views import SaleViewSet
 from .wastage_reason import WastageReasonViewSet
 from .product_wastage import ProductWastageViewSet
 from .ingredient_wastage import IngredientWastageViewSet
+from .stock_history import ProductStockHistoryViewSet, IngredientStockHistoryViewSet
+from .notification_views import NotificationViewSet
 
 __all__ = [
     'LoginView',
@@ -32,4 +34,7 @@ __all__ = [
     'WastageReasonViewSet',
     'ProductWastageViewSet',
     'IngredientWastageViewSet',
+    'ProductStockHistoryViewSet',
+    'IngredientStockHistoryViewSet',
+    'NotificationViewSet',
 ]

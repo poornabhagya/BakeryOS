@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime, date, time
 from .ingredient import Ingredient
 
 
@@ -111,12 +111,19 @@ class IngredientBatch(models.Model):
     @property
     def is_expired(self):
         """Check if batch has expired"""
-        return timezone.now() > self.expire_date
+        # Both should be compared as datetime objects
+        now = timezone.now()
+        # If expire_date is a datetime, use it directly; if it's a date, convert to datetime
+        expire = self.expire_date if isinstance(self.expire_date, datetime) else datetime.combine(self.expire_date, time())
+        return now > expire
     
     @property
     def days_until_expiry(self):
         """Calculate days remaining until expiry"""
-        days = (self.expire_date - timezone.now()).days
+        now = timezone.now().date()
+        # If expire_date is a datetime, convert to date; if it's already a date, use it directly
+        expire = self.expire_date.date() if isinstance(self.expire_date, datetime) else self.expire_date
+        days = (expire - now).days
         return max(days, 0) if not self.is_expired else days
     
     @property
