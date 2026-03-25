@@ -12,6 +12,9 @@ from .batch_product_views import ProductBatchViewSet
 from .recipe_views import RecipeViewSet
 from .discount_views import DiscountViewSet
 from .sale_views import SaleViewSet
+from .wastage_reason import WastageReasonViewSet
+from .product_wastage import ProductWastageViewSet
+from .ingredient_wastage import IngredientWastageViewSet
 
 __all__ = [
     'LoginView',
@@ -26,4 +29,7 @@ __all__ = [
     'RecipeViewSet',
     'DiscountViewSet',
     'SaleViewSet',
+    'WastageReasonViewSet',
+    'ProductWastageViewSet',
+    'IngredientWastageViewSet',
 ]
