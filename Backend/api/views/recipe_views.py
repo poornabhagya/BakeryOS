@@ -18,14 +18,6 @@ from api.serializers import (
 from api.permissions import IsManager
 
 
-class IsManagerOnly(IsAuthenticated):
-    """Permission: Manager only (full CRUD)"""
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        return request.user.role == 'Manager'
-
-
 class RecipeViewSet(viewsets.ViewSet):
     """
     ViewSet for Recipe management (product recipes with ingredients).

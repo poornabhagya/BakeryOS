@@ -12,6 +12,7 @@ from api.serializers import (
     ProductWastageDetailSerializer,
     ProductWastageCreateSerializer,
 )
+from api.permissions import CanReportProductWastage, IsManager
 
 
 class ProductWastageViewSet(viewsets.ModelViewSet):
@@ -20,7 +21,7 @@ class ProductWastageViewSet(viewsets.ModelViewSet):
     
     Endpoints:
     - GET /api/product-wastages/ - List all wastages
-    - POST /api/product-wastages/ - Create new wastage
+    - POST /api/product-wastages/ - Create new wastage (Baker, Cashier, Manager)
     - GET /api/product-wastages/{id}/ - Get wastage details
     - DELETE /api/product-wastages/{id}/ - Delete wastage (Manager only)
     - GET /api/product-wastages/analytics/ - Wastage analytics
@@ -43,12 +44,13 @@ class ProductWastageViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """Set permissions based on action."""
-        if self.action == 'destroy':
+        if self.action == 'create':
+            # Can report: Baker, Cashier, Manager
+            return [CanReportProductWastage()]
+        elif self.action == 'destroy':
             # Only Manager can delete
-            from rest_framework.permissions import IsAuthenticated
-            # Will be checked in destroy method
-            pass
-        return super().get_permissions()
+            return [IsManager()]
+        return [IsAuthenticated()]
     
     def list(self, request, *args, **kwargs):
         """
@@ -100,20 +102,12 @@ class ProductWastageViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """
         Create a new product wastage record.
-        Only Baker, Cashier, and Manager can create.
+        Only Baker, Cashier, and Manager can create (permission enforced).
         """
-        # Check permission
-        user = request.user
-        if user.role not in ['Baker', 'Cashier', 'Manager']:
-            return Response(
-                {'detail': 'Only Baker, Cashier, or Manager can report wastage.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
         # Set reported_by to current user if not provided
         data = request.data.copy()
         if 'reported_by' not in data or not data['reported_by']:
-            data['reported_by'] = user.id
+            data['reported_by'] = request.user.id
         
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -132,16 +126,9 @@ class ProductWastageViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """
         Delete/undo wastage record.
-        Only Manager can delete.
+        Only Manager can delete (permission enforced).
         Restores product stock.
         """
-        user = request.user
-        if user.role != 'Manager':
-            return Response(
-                {'detail': 'Only Manager can delete wastage records.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
         instance = self.get_object()
         
         # Restore product stock

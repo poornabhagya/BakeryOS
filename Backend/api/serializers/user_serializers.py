@@ -10,6 +10,11 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 import re
+from api.validators import (
+    validate_username_format, validate_password_strength, 
+    validate_contact_format, validate_email_format,
+    sanitize_string, sanitize_email
+)
 
 User = get_user_model()
 
@@ -107,76 +112,94 @@ class UserCreateSerializer(serializers.ModelSerializer):
     
     def validate_username(self, value):
         """Validate username is unique and follows format"""
+        # Sanitize the input
+        value = sanitize_string(value)
+        
+        # Use centralized validator
+        validate_username_format(value)
+        
+        # Check uniqueness
         if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("Username already exists")
-        
-        # Must be alphanumeric + underscore, 3-30 chars
-        if len(value) < 3 or len(value) > 30:
-            raise serializers.ValidationError("Username must be 3-30 characters")
-        
-        if not re.match(r'^[a-zA-Z0-9_]+$', value):
-            raise serializers.ValidationError("Username can only contain letters, numbers, and underscores")
+            raise serializers.ValidationError("Username already exists.")
         
         return value
     
     def validate_password(self, value):
-        """Validate password strength"""
-        if len(value) < 8:
-            raise serializers.ValidationError("Password must be at least 8 characters")
-        
-        # Check for uppercase
-        if not any(char.isupper() for char in value):
-            raise serializers.ValidationError("Password must contain at least one uppercase letter")
-        
-        # Check for lowercase
-        if not any(char.islower() for char in value):
-            raise serializers.ValidationError("Password must contain at least one lowercase letter")
-        
-        # Check for number
-        if not any(char.isdigit() for char in value):
-            raise serializers.ValidationError("Password must contain at least one number")
-        
+        """Validate password strength using centralized validator"""
+        try:
+            validate_password_strength(value)
+        except serializers.ValidationError:
+            raise
         return value
     
     def validate_contact(self, value):
-        """Validate phone number format"""
+        """Validate phone number format using centralized validator"""
         if value:
-            # Remove common separators
-            cleaned = re.sub(r'[\s\-\(\)\.]+', '', value)
-            
-            # Should be digits only after cleaning
-            if not cleaned.isdigit():
-                raise serializers.ValidationError("Contact must be a valid phone number")
-            
-            # Should be 10+ digits
-            if len(cleaned) < 10:
-                raise serializers.ValidationError("Contact must have at least 10 digits")
-        
+            try:
+                validate_contact_format(value)
+            except serializers.ValidationError:
+                raise
         return value
     
     def validate_email(self, value):
-        """Validate email is unique"""
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Email already registered")
+        """Validate email format and uniqueness"""
+        # Sanitize email
+        value = sanitize_email(value)
         
-        return value.lower()
+        # Validate format
+        try:
+            validate_email_format(value)
+        except serializers.ValidationError:
+            raise
+        
+        # Check uniqueness
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email already registered.")
+        
+        return value
     
     def validate_role(self, value):
         """Validate role is one of allowed choices"""
         valid_roles = ['Manager', 'Cashier', 'Baker', 'Storekeeper']
         if value not in valid_roles:
-            raise serializers.ValidationError(f"Role must be one of: {', '.join(valid_roles)}")
-        
+            raise serializers.ValidationError(
+                f"Invalid role. Must be one of: {', '.join(valid_roles)}"
+            )
+        return value
+    
+    def validate_full_name(self, value):
+        """Sanitize and validate full name"""
+        if value:
+            value = sanitize_string(value)
+            if len(value) < 2:
+                raise serializers.ValidationError("Full name must be at least 2 characters.")
+        return value
+    
+    def validate_nic(self, value):
+        """Validate NIC format"""
+        if value:
+            value = sanitize_string(value).upper()
+            # Basic NIC format validation
+            if not re.match(r'^(\d{9}[VX]|\d{12})$', value):
+                raise serializers.ValidationError(
+                    "Invalid NIC format. Expected: 9 digits + V/X or 12 digits."
+                )
         return value
     
     def validate(self, data):
-        """Validate passwords match"""
+        """Validate passwords match and overall data integrity"""
         password = data.get('password')
         password_confirm = data.pop('password_confirm', None)
         
         if password != password_confirm:
             raise serializers.ValidationError({
-                'password_confirm': "Passwords do not match"
+                'password_confirm': "Passwords do not match."
+            })
+        
+        # Additional cross-field validation
+        if not data.get('role'):
+            raise serializers.ValidationError({
+                'role': "Role is required."
             })
         
         return data

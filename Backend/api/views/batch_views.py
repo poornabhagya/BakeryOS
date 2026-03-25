@@ -15,25 +15,7 @@ from api.serializers import (
     BatchCreateSerializer,
     BatchConsumeSerializer,
 )
-from api.permissions import IsManager
-
-
-class IsStorekeeperOrManager(IsAuthenticated):
-    """Permission: Storekeeper or Manager"""
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        user = request.user
-        return user.role in ['Storekeeper', 'Manager']
-
-
-class IsStorekeeperOrManagerOrBaker(IsAuthenticated):
-    """Permission: Storekeeper, Manager, or Baker"""
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        user = request.user
-        return user.role in ['Storekeeper', 'Manager', 'Baker']
+from api.permissions import IsManager, IsManagerOrStorekeeper, IsManagerOrStorekeeperOrBaker
 
 
 class BatchViewSet(viewsets.ModelViewSet):
@@ -100,16 +82,16 @@ class BatchViewSet(viewsets.ModelViewSet):
         Return appropriate permission classes based on action.
         
         Permissions:
-        - list/retrieve: Storekeeper OR Manager OR Baker
-        - create/update/delete: Storekeeper OR Manager
+        - list/retrieve: Storekeeper OR Manager OR Baker (read-only)
+        - create/update/delete: Storekeeper OR Manager (write operations)
         - consume: Storekeeper OR Manager (for stock deduction)
         """
         if self.action in ['list', 'retrieve', 'by_ingredient', 'expiring']:
             # All authenticated users can view batches
-            self.permission_classes = [IsStorekeeperOrManagerOrBaker]
+            self.permission_classes = [IsManagerOrStorekeeperOrBaker]
         elif self.action in ['create', 'update', 'partial_update', 'destroy', 'consume']:
             # Only Storekeeper and Manager can modify
-            self.permission_classes = [IsStorekeeperOrManager]
+            self.permission_classes = [IsManagerOrStorekeeper]
         else:
             self.permission_classes = [IsAuthenticated]
         return [permission() for permission in self.permission_classes]

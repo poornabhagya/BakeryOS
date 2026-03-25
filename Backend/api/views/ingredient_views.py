@@ -13,25 +13,7 @@ from api.serializers import (
     IngredientCreateSerializer,
     IngredientUpdateSerializer,
 )
-from api.permissions import IsManager, IsStorekeeper, IsBaker
-
-
-class IsManagerOrStorekeeper(IsAuthenticated):
-    """Permission: Manager or Storekeeper"""
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        user = request.user
-        return user.role in ['Manager', 'Storekeeper']
-
-
-class IsManagerOrStorekeeperOrBaker(IsAuthenticated):
-    """Permission: Manager, Storekeeper, or Baker"""
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        user = request.user
-        return user.role in ['Manager', 'Storekeeper', 'Baker']
+from api.permissions import IsManager, IsStorekeeper, IsBaker, IsManagerOrStorekeeper, IsManagerOrStorekeeperOrBaker
 
 
 class IngredientViewSet(viewsets.ModelViewSet):

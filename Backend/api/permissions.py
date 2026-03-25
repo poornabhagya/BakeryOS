@@ -1,15 +1,31 @@
 """
 Custom permission classes for BakeryOS API
 Implements role-based access control for all endpoints
+
+Role Hierarchy:
+- Manager: Full system access (users, products, ingredients, sales, wastage, discounts, analytics)
+- Storekeeper: Ingredient & batch management (can read products, sales)
+- Baker: Production & batch creation (can read ingredients, products, sales)
+- Cashier: POS/Billing operations (can create sales, read products)
+- Clerk: General staff (read-only access)
+
+Permission Classes:
+1. Single Role: IsManager, IsStorekeeper, IsBaker, IsCashier
+2. Multiple Roles: IsManagerOrStorekeeper, IsManagerOrBaker, IsCashierOrManager, etc.
+3. Special: IsManagerOrReadOnly, IsManagerOrSelf
 """
 
 from rest_framework.permissions import BasePermission, IsAuthenticated
 
 
+# ============================================================================
+# SINGLE ROLE PERMISSION CLASSES
+# ============================================================================
+
 class IsManager(IsAuthenticated):
     """
     Permission class: Only Manager role can access
-    Used for: Creating users, deleting users, managing discounts, etc.
+    Used for: User CRUD, product CRUD, discount CRUD, wastage deletion, analytics
     """
     def has_permission(self, request, view):
         return (
@@ -18,10 +34,98 @@ class IsManager(IsAuthenticated):
         )
 
 
+class IsStorekeeper(IsAuthenticated):
+    """
+    Permission class: Only Storekeeper role can access
+    Used for: Ingredient and batch management specifically
+    """
+    def has_permission(self, request, view):
+        return (
+            super().has_permission(request, view) and 
+            request.user.role == 'Storekeeper'
+        )
+
+
+class IsBaker(IsAuthenticated):
+    """
+    Permission class: Only Baker role can access
+    Used for: Product batch creation and production management
+    """
+    def has_permission(self, request, view):
+        return (
+            super().has_permission(request, view) and 
+            request.user.role == 'Baker'
+        )
+
+
+class IsCashier(IsAuthenticated):
+    """
+    Permission class: Only Cashier role can access
+    Used for: POS/Billing/Sale creation operations
+    """
+    def has_permission(self, request, view):
+        return (
+            super().has_permission(request, view) and 
+            request.user.role == 'Cashier'
+        )
+
+
+# ============================================================================
+# MULTI-ROLE PERMISSION CLASSES
+# ============================================================================
+
+class IsManagerOrStorekeeper(IsAuthenticated):
+    """
+    Permission class: Manager or Storekeeper can access
+    Used for: Ingredient CRUD (shared between Manager and Storekeeper)
+    """
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        return request.user.role in ['Manager', 'Storekeeper']
+
+
+class IsManagerOrBaker(IsAuthenticated):
+    """
+    Permission class: Manager or Baker can access
+    Used for: Production-related operations
+    """
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        return request.user.role in ['Manager', 'Baker']
+
+
+class IsManagerOrStorekeeperOrBaker(IsAuthenticated):
+    """
+    Permission class: Manager, Storekeeper, or Baker can access
+    Used for: Read-only access to ingredients/products for multiple roles
+    """
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        return request.user.role in ['Manager', 'Storekeeper', 'Baker']
+
+
+class IsCashierOrManager(IsAuthenticated):
+    """
+    Permission class: Manager can view/delete all sales, Cashier can create sales
+    Used for: Sales/POS operations with manager oversight
+    """
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        return request.user.role in ['Manager', 'Cashier']
+
+
 class IsManagerOrReadOnly(IsAuthenticated):
     """
     Permission class: Manager can do anything, others can only view
-    Used for: Product management, ingredient management, etc.
+    Used for: Product management, ingredient management, category management
+    
+    Allows:
+    - Manager: GET, POST, PUT, PATCH, DELETE
+    - Others: GET, HEAD, OPTIONS only
     """
     def has_permission(self, request, view):
         if not super().has_permission(request, view):
@@ -37,12 +141,18 @@ class IsManagerOrReadOnly(IsAuthenticated):
 
 class IsManagerOrSelf(IsAuthenticated):
     """
-    Permission class: Manager can manage anyone, users can update own profile
-    Used for: User profile updates
-    Restrictions:
-    - Regular users can only update own profile
-    - Users cannot change their own role or status
-    - Only Manager can change role or status
+    Permission class: Manager can manage anyone, users can update own profile only
+    Used for: User profile updates and self-service operations
+    
+    Features:
+    - Manager: Full access to all user profiles
+    - Regular users: Can only retrieve/update own profile
+    - Restrictions: Regular users cannot change their role or status
+    
+    Has Object-Level Permissions:
+    - Manager role bypasses object checks
+    - Non-managers can only access objects they own (obj.id == request.user.id)
+    - POST/PUT/PATCH: Non-managers cannot modify 'role' or 'status' fields
     """
     def has_object_permission(self, request, view, obj):
         # Manager can do anything
@@ -58,44 +168,43 @@ class IsManagerOrSelf(IsAuthenticated):
                     return False
             return True
         
-        # Otherwise deny
+        # Otherwise deny - users cannot access other users' profiles
         return False
 
 
-class IsStorekeeper(IsAuthenticated):
+# ============================================================================
+# WASTAGE-SPECIFIC PERMISSION CLASSES
+# ============================================================================
+
+class CanReportProductWastage(IsAuthenticated):
     """
-    Permission class: Only Storekeeper role can access
-    Used for: Ingredient and batch management
+    Permission class: Baker, Cashier, or Manager can report product wastage
+    Used for: ProductWastage creation
+    
+    Allows:
+    - Baker: Report wastage
+    - Cashier: Report wastage (during sales operations)
+    - Manager: Report and delete wastage
     """
     def has_permission(self, request, view):
-        return (
-            super().has_permission(request, view) and 
-            request.user.role == 'Storekeeper'
-        )
+        if not super().has_permission(request, view):
+            return False
+        return request.user.role in ['Baker', 'Cashier', 'Manager']
 
 
-class IsBaker(IsAuthenticated):
+class CanReportIngredientWastage(IsAuthenticated):
     """
-    Permission class: Only Baker role can access
-    Used for: Production and batch creation
-    """
-    def has_permission(self, request, view):
-        return (
-            super().has_permission(request, view) and 
-            request.user.role == 'Baker'
-        )
-
-
-class IsCashier(IsAuthenticated):
-    """
-    Permission class: Only Cashier role can access
-    Used for: POS/Billing operations
+    Permission class: Storekeeper or Manager can report ingredient wastage
+    Used for: IngredientWastage creation
+    
+    Allows:
+    - Storekeeper: Report ingredient wastage
+    - Manager: Report and delete wastage
     """
     def has_permission(self, request, view):
-        return (
-            super().has_permission(request, view) and 
-            request.user.role == 'Cashier'
-        )
+        if not super().has_permission(request, view):
+            return False
+        return request.user.role in ['Storekeeper', 'Manager']
 
 
 class HasRolePermission(IsAuthenticated):

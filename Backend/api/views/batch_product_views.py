@@ -14,51 +14,7 @@ from api.serializers import (
     ProductBatchUseBatchSerializer,
     ProductBatchExpiringSerializer,
 )
-
-
-class IsBaker(IsAuthenticated):
-    """Permission: Only Baker role"""
-    
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        return request.user.role == 'Baker'
-
-
-class IsBakerOrManager(IsAuthenticated):
-    """Permission: Baker can create/use, Manager can do everything"""
-    
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        return request.user.role in ['Baker', 'Manager']
-
-
-class IsStorekeeper(IsAuthenticated):
-    """Permission: Only Storekeeper role"""
-    
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        return request.user.role == 'Storekeeper'
-
-
-class IsStorkeeperOrManager(IsAuthenticated):
-    """Permission: Storekeeper read-only, Manager full access"""
-    
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        return request.user.role in ['Storekeeper', 'Manager']
-
-
-class IsManagerOnly(IsAuthenticated):
-    """Permission: Only Manager role"""
-    
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        return request.user.role == 'Manager'
+from api.permissions import IsBaker, IsManagerOrBaker, IsManager, IsManagerOrStorekeeperOrBaker
 
 
 class ProductBatchViewSet(viewsets.ModelViewSet):
@@ -84,7 +40,6 @@ class ProductBatchViewSet(viewsets.ModelViewSet):
     
     queryset = ProductBatch.objects.all().prefetch_related('product_id')
     serializer_class = ProductBatchListSerializer
-    permission_classes = [IsStorkeeperOrManager]
     
     def get_serializer_class(self):
         """Route to appropriate serializer based on action"""
@@ -103,16 +58,16 @@ class ProductBatchViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """Set permissions based on action"""
         if self.action == 'create':
-            return [IsBakerOrManager()]  # Baker can create, Manager can too
+            return [IsManagerOrBaker()]  # Baker can create, Manager can too
         elif self.action in ['update', 'partial_update']:
-            return [IsBakerOrManager()]  # Baker can update, Manager can too
+            return [IsManagerOrBaker()]  # Baker can update, Manager can too
         elif self.action == 'use_batch':
-            return [IsBakerOrManager()]  # Baker can use, Manager can too
+            return [IsManagerOrBaker()]  # Baker can use, Manager can too
         elif self.action == 'destroy':
-            return [IsManagerOnly()]  # Only Manager can delete
+            return [IsManager()]  # Only Manager can delete
         elif self.action == 'get_expiring':
-            return [IsBakerOrManager()]  # Baker and Manager can check
-        return [IsStorkeeperOrManager()]  # Storekeeper read-only, Manager full access
+            return [IsManagerOrBaker()]  # Baker and Manager can check
+        return [IsManagerOrStorekeeperOrBaker()]  # All can view, limited write access
     
     def get_queryset(self):
         """Filter batches based on user role"""

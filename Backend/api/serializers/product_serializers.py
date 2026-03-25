@@ -1,5 +1,10 @@
 from rest_framework import serializers
 from api.models import Product, Category
+from api.validators import (
+    validate_positive_number, validate_non_negative_number,
+    sanitize_string, sanitize_html
+)
+from decimal import Decimal
 
 
 class ProductListSerializer(serializers.ModelSerializer):
@@ -61,6 +66,13 @@ class ProductCreateSerializer(serializers.ModelSerializer):
     Serializer for creating and updating products.
     Validates required fields and constraints.
     Used for: POST /api/products/, PUT /api/products/{id}/, PATCH /api/products/{id}/
+    
+    Validation:
+    - name: Non-empty, unique per category, sanitized
+    - cost_price: Must be positive (> 0)
+    - selling_price: Must be > cost_price
+    - shelf_life: Must be positive integer
+    - current_stock: Must be non-negative
     """
     class Meta:
         model = Product
@@ -70,32 +82,85 @@ class ProductCreateSerializer(serializers.ModelSerializer):
             'shelf_life', 'shelf_unit'
         ]
     
+    def validate_name(self, value):
+        """Validate and sanitize product name"""
+        if not value:
+            raise serializers.ValidationError("Product name is required.")
+        
+        # Sanitize
+        value = sanitize_string(value)
+        
+        if len(value) < 2:
+            raise serializers.ValidationError("Product name must be at least 2 characters.")
+        
+        if len(value) > 255:
+            raise serializers.ValidationError("Product name must not exceed 255 characters.")
+        
+        return value
+    
+    def validate_category_id(self, value):
+        """Validate category exists"""
+        if not Category.objects.filter(id=value.id, type='Product').exists():
+            raise serializers.ValidationError("Selected category must be a Product category.")
+        return value
+    
+    def validate_cost_price(self, value):
+        """Validate cost price"""
+        try:
+            validate_positive_number(value)
+        except serializers.ValidationError:
+            raise serializers.ValidationError("Cost price must be greater than 0.")
+        
+        # Check it's 2 decimal places or less
+        if isinstance(value, Decimal):
+            if value.as_tuple().exponent < -2:
+                raise serializers.ValidationError("Cost price can have maximum 2 decimal places.")
+        
+        return value
+    
+    def validate_selling_price(self, value):
+        """Validate selling price"""
+        try:
+            validate_positive_number(value)
+        except serializers.ValidationError:
+            raise serializers.ValidationError("Selling price must be greater than 0.")
+        
+        # Check it's 2 decimal places or less
+        if isinstance(value, Decimal):
+            if value.as_tuple().exponent < -2:
+                raise serializers.ValidationError("Selling price can have maximum 2 decimal places.")
+        
+        return value
+    
+    def validate_current_stock(self, value):
+        """Validate current stock"""
+        try:
+            validate_non_negative_number(value)
+        except serializers.ValidationError:
+            raise serializers.ValidationError("Stock quantity cannot be negative.")
+        return value
+    
+    def validate_shelf_life(self, value):
+        """Validate shelf life"""
+        if not value or value <= 0:
+            raise serializers.ValidationError("Shelf life must be at least 1.")
+        return value
+    
+    def validate_description(self, value):
+        """Sanitize description"""
+        if value:
+            value = sanitize_html(value)
+        return value
+    
     def validate(self, data):
         """Custom validation for product data"""
-        # Check cost_price > 0
-        if data.get('cost_price', 0) <= 0:
-            raise serializers.ValidationError({
-                'cost_price': 'Cost price must be greater than 0'
-            })
-        
-        # Check selling_price > cost_price (should make profit)
+        # Validate selling price > cost price
         cost = data.get('cost_price')
         selling = data.get('selling_price')
+        
         if cost and selling and selling <= cost:
             raise serializers.ValidationError({
-                'selling_price': 'Selling price must be greater than cost price'
-            })
-        
-        # Check shelf_life > 0
-        if data.get('shelf_life', 0) <= 0:
-            raise serializers.ValidationError({
-                'shelf_life': 'Shelf life must be at least 1'
-            })
-        
-        # Check current_stock >= 0
-        if data.get('current_stock', 0) < 0:
-            raise serializers.ValidationError({
-                'current_stock': 'Stock quantity cannot be negative'
+                'selling_price': "Selling price must be greater than cost price."
             })
         
         # Check unique constraint: name per category
@@ -110,7 +175,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
             
             if queryset.exists():
                 raise serializers.ValidationError({
-                    'name': f'Product "{name}" already exists in this category'
+                    'name': f'Product "{name}" already exists in this category.'
                 })
         
         return data
