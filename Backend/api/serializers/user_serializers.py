@@ -36,6 +36,7 @@ class UserListSerializer(serializers.ModelSerializer):
             'role',
             'status',
             'contact',
+            'avatar_color',
             'created_at',
             'updated_at'
         ]

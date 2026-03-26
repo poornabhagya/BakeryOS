@@ -55,7 +55,7 @@ export function Header({ breadcrumbPath = ['Dashboard', 'Overview'] }: HeaderPro
           <div className="text-right hidden md:block">
             {/* User's Name */}
             <p className="text-sm font-bold text-gray-900 leading-none mb-1">
-              {user?.name || 'User'}
+              {user?.full_name || 'User'}
             </p>
             {/* Access Level corresponding to the user's role */}
             <p className="text-xs text-gray-500 font-medium">

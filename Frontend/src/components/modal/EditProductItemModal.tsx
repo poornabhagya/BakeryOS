@@ -28,11 +28,12 @@ type EditProductItemModalProps = {
   itemToEdit: {
     id: string;
     name: string;
-    category: string;
-    shelfLife: string;
-    shelfLifeUnit: string;
-    cost: number;
-    price: number;
+    category_name: string;
+    category_id: number;
+    shelf_life: string;
+    shelf_unit: string;
+    cost_price: number;
+    selling_price: number;
     recipe: RecipeRow[];
   } | null;
 };
@@ -54,11 +55,11 @@ export const EditProductItemModal: React.FC<EditProductItemModalProps> = ({ isOp
     if (isOpen && itemToEdit) {
       setItemId(itemToEdit.id || '');
       setItemName(itemToEdit.name || '');
-      setCategory(itemToEdit.category || '');
-      setShelfLife(itemToEdit.shelfLife || '');
-      setShelfLifeUnit(itemToEdit.shelfLifeUnit || 'Days');
-      setCostPrice(itemToEdit.cost?.toString() || '');
-      setSellingPrice(itemToEdit.price?.toString() || '');
+      setCategory(itemToEdit.category_name || '');
+      setShelfLife(itemToEdit.shelf_life || '');
+      setShelfLifeUnit(itemToEdit.shelf_unit || 'Days');
+      setCostPrice(itemToEdit.cost_price?.toString() || '');
+      setSellingPrice(itemToEdit.selling_price?.toString() || '');
       setRecipe(
         itemToEdit.recipe && itemToEdit.recipe.length > 0
           ? itemToEdit.recipe.map(row => ({
