@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { StaffTable } from './StaffTable';
 import { AddUserModal } from './modal/AddUserModal';
 import EditUserModal from './modal/EditUserModal';
@@ -6,9 +6,11 @@ import DeleteUserModal from './modal/DeleteUserModal';
 // Remove invalid top-level hook calls. All hooks must be inside the component.
 import { Card } from "./ui/card";
 import { KPICard } from "./KPICard";
-import { User, Users, UserCheck, UserX, Search, Plus, RotateCcw } from "lucide-react";
+import { User, Users, UserCheck, UserX, Search, Plus, RotateCcw, Loader } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import apiClient from '../services/api';
+import { convertApiUserToUi } from '../utils/conversions';
 
 interface StaffMember {
   id: number;
@@ -76,15 +78,68 @@ const initialStaffMembers: StaffMember[] = [
 
 
 export function UserManagement() {
+  // --- State: API Data ---
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<StaffMember | null>(null);
-  const [staff, setStaff] = useState<StaffMember[]>(initialStaffMembers);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteUserOpen, setDeleteUserOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<StaffMember | null>(null);
+
+  // --- Fetch Users from API ---
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setIsLoading(true);
+        setFetchError(null);
+        const response = await apiClient.users.getAll();
+        // Convert API users to UI format (StaffMember)
+        const uiUsers = response.results.map((apiUser: any) => {
+          const uiUser = convertApiUserToUi(apiUser);
+          return {
+            id: uiUser.id,
+            employeeId: uiUser.employee_id,
+            name: uiUser.name,
+            nic: uiUser.contact, // Map contact to NIC for now
+            role: uiUser.role,
+            roleColor: getRoleColor(uiUser.role),
+            status: (uiUser.status === 'active' ? 'Active' : 'Inactive') as 'Active' | 'Inactive',
+            contact: uiUser.contact,
+            lastLogin: 'N/A', // Backend doesn't track this
+            avatarColor: uiUser.avatarColor,
+          };
+        });
+        setStaff(uiUsers);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to fetch users';
+        setFetchError(errorMsg);
+        console.error('Error fetching users:', error);
+        // Fall back to initial mock data
+        setStaff(initialStaffMembers);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  // Helper to get role color
+  const getRoleColor = (role: string) => {
+    const colors: Record<string, string> = {
+      'Baker': 'blue',
+      'Cashier': 'green',
+      'Storekeeper': 'orange',
+      'Manager': 'purple',
+    };
+    return colors[role] || 'gray';
+  };
 
   const filteredStaff = useMemo(() => {
     return staff.filter(member => {

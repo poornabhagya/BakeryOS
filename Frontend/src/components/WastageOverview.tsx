@@ -5,6 +5,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { AddWastageReasonModal } from './modal/AddWastageReasonModal';
 import { ViewWastageReasonsModal, WastageReason } from './modal/ViewWastageReasonsModal';
+import { multiplyNumeric } from '../utils/numericUtils';
 
 type WastageItem = {
   id: string;
@@ -111,8 +112,8 @@ export function WastageOverview() {
 
   // KPIs
   const totalLoss = useMemo(() => {
-    const sumProd = filteredProduct.reduce((s, it) => s + it.unitCost * it.quantity, 0);
-    const sumIng = filteredIngredient.reduce((s, it) => s + it.unitCost * it.quantity, 0);
+    const sumProd = filteredProduct.reduce((s, it) => s + multiplyNumeric(it.unitCost, it.quantity), 0);
+    const sumIng = filteredIngredient.reduce((s, it) => s + multiplyNumeric(it.unitCost, it.quantity), 0);
     return sumProd + sumIng;
   }, [filteredProduct, filteredIngredient]);
 
@@ -318,7 +319,7 @@ export function WastageOverview() {
                     <td className="py-3 px-4 text-gray-600">{r.category}</td>
                     <td className="py-3 px-4"> <span className={reasonBadge(r.reason)}>{r.reason}</span> </td>
                     <td className="py-3 px-4 text-gray-800">{r.quantity} {r.unit}</td>
-                    <td className="py-3 px-4 text-red-700">Rs. {(r.unitCost * r.quantity).toLocaleString()}</td>
+                    <td className="py-3 px-4 text-red-700">Rs. {multiplyNumeric(r.unitCost, r.quantity).toLocaleString()}</td>
                     <td className="py-3 px-4 text-gray-600">{r.reportedBy}</td>
                     <td className="py-3 px-4 text-gray-600">{formatDateDisplay(r.date, r.time)}</td>
                   </tr>
@@ -353,7 +354,7 @@ export function WastageOverview() {
                     <td className="py-3 px-4 text-gray-600">{r.category}</td>
                     <td className="py-3 px-4"> <span className={reasonBadge(r.reason)}>{r.reason}</span> </td>
                     <td className="py-3 px-4 text-gray-800">{r.quantity} {r.unit}</td>
-                    <td className="py-3 px-4 text-red-700">Rs. {(r.unitCost * r.quantity).toLocaleString()}</td>
+                    <td className="py-3 px-4 text-red-700">Rs. {multiplyNumeric(r.unitCost, r.quantity).toLocaleString()}</td>
                     <td className="py-3 px-4 text-gray-600">{r.reportedBy}</td>
                     <td className="py-3 px-4 text-gray-600">{formatDateDisplay(r.date, r.time)}</td>
                   </tr>

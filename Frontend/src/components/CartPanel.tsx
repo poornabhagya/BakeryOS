@@ -1,12 +1,15 @@
 import { Minus, Plus, Trash2, Printer } from 'lucide-react';
 import { Card } from './ui/card';
+import { toNumber } from '../utils/numericUtils';
 
 interface CartItem {
   id: number;
   name: string;
-  price: number;
+  selling_price: number;
   quantity: number;
-  stock: number;
+  current_stock: number;
+  unit_price: number;           // Frozen price when added (matches backend)
+  subtotal: number;              // quantity * unit_price (pre-calculated)
 }
 
 interface CartPanelProps {
@@ -34,8 +37,9 @@ export function CartPanel({
   discountAmount,
   onDiscountChange,
 }: CartPanelProps) {
-  const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const total = subtotal - discountAmount;
+  // Safely convert subtotals that might be strings from backend API
+  const subtotal = items.reduce((sum, item) => sum + toNumber(item.subtotal), 0);
+  const total = toNumber(subtotal) - toNumber(discountAmount);
 
   return (
     <div className="h-full flex flex-col bg-white border-l border-gray-200">
@@ -57,7 +61,7 @@ export function CartPanel({
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                   <h4 className="text-gray-900">{item.name}</h4>
-                  <p className="text-sm text-gray-600">Rs. {item.price} each</p>
+                  <p className="text-sm text-gray-600">Rs. {item.unit_price} each</p>
                 </div>
                 <button
                   onClick={() => onRemoveItem(item.id)}
@@ -79,9 +83,9 @@ export function CartPanel({
                   <span className="w-12 text-center tabular-nums">{item.quantity}</span>
                   <button
                     onClick={() => onUpdateQuantity(item.id, 1)}
-                    disabled={item.quantity >= item.stock}
+                    disabled={item.quantity >= item.current_stock}
                     className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
-                      item.quantity >= item.stock
+                      item.quantity >= item.current_stock
                         ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         : 'bg-orange-100 hover:bg-orange-200 text-orange-700'
                     }`}
@@ -92,7 +96,7 @@ export function CartPanel({
 
                 {/* Item Total */}
                 <span className="text-orange-700 tabular-nums">
-                  Rs. {(item.price * item.quantity).toLocaleString()}
+                  Rs. {item.subtotal.toLocaleString()}
                 </span>
               </div>
             </Card>
@@ -105,7 +109,7 @@ export function CartPanel({
         {/* Subtotal */}
         <div className="flex items-center justify-between text-gray-700">
           <span>Subtotal</span>
-          <span className="tabular-nums">Rs. {subtotal.toLocaleString()}</span>
+          <span className="tabular-nums">Rs. {subtotal.toFixed(2)}</span>
         </div>
 
         {/* Discount Input */}
@@ -145,7 +149,7 @@ export function CartPanel({
           <div className="flex items-center justify-between mb-4">
             <span className="text-gray-900">TOTAL PAYABLE</span>
             <span className="text-2xl text-orange-700 tabular-nums">
-              Rs. {total.toLocaleString()}
+              Rs. {total.toFixed(2)}
             </span>
           </div>
 

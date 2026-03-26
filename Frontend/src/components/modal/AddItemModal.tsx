@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { toNumber } from '../../utils/numericUtils';
 
 interface RecipeRow {
 	ingredientId: string;
@@ -44,9 +45,9 @@ export function AddItemModal({ open, onClose }: AddItemModalProps) {
 	let profit = null;
 	let profitPercent = null;
 	let badgeColor = '';
-	if (costPrice && sellingPrice && !isNaN(Number(costPrice)) && !isNaN(Number(sellingPrice))) {
-		const cp = Number(costPrice);
-		const sp = Number(sellingPrice);
+	if (costPrice && sellingPrice && !isNaN(toNumber(costPrice)) && !isNaN(toNumber(sellingPrice))) {
+		const cp = toNumber(costPrice);
+		const sp = toNumber(sellingPrice);
 		if (sp > cp) {
 			profit = sp - cp;
 			profitPercent = ((profit / cp) * 100).toFixed(1);

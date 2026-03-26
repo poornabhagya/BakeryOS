@@ -4,29 +4,30 @@ import { Badge } from './ui/badge';
 
 interface ProductCardProps {
   id: number;
+  product_id: string;
   name: string;
-  price: number;
-  stock: number;
-  image: string;
-  category: string;
+  selling_price: number;
+  current_stock: number;
+  image_url: string;
+  category_name: string;
   onAdd: (product: any) => void;
 }
 
-export function ProductCard({ id, name, price, stock, image, category, onAdd }: ProductCardProps) {
-  const isLowStock = stock <= 5;
-  const isOutOfStock = stock === 0;
+export function ProductCard({ id, product_id, name, selling_price, current_stock, image_url, category_name, onAdd }: ProductCardProps) {
+  const isLowStock = current_stock <= 5;
+  const isOutOfStock = current_stock === 0;
 
   return (
     <Card 
       className={`overflow-hidden hover:shadow-lg transition-all ${
         isOutOfStock ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
       }`}
-      onClick={() => !isOutOfStock && onAdd({ id, name, price, stock, category })}
+      onClick={() => !isOutOfStock && onAdd({ id, product_id, name, selling_price, current_stock, image_url, category_name })}
     >
       {/* Product Image */}
       <div className="relative h-40 bg-gray-100 overflow-hidden">
         <img 
-          src={image} 
+          src={image_url} 
           alt={name}
           className="w-full h-full object-cover"
         />
@@ -41,7 +42,7 @@ export function ProductCard({ id, name, price, stock, image, category, onAdd }: 
                   : 'bg-green-600 text-white'
             }`}
           >
-            {stock} Left
+            {current_stock} Left
           </Badge>
         </div>
       </div>
@@ -51,12 +52,12 @@ export function ProductCard({ id, name, price, stock, image, category, onAdd }: 
         <h4 className="text-gray-900 mb-2">{name}</h4>
         <div className="flex items-center justify-between">
           <span className="text-orange-700 tabular-nums">
-            Rs. {price}
+            Rs. {selling_price}
           </span>
           <button
             onClick={(e) => {
               e.stopPropagation();
-              !isOutOfStock && onAdd({ id, name, price, stock, category });
+              !isOutOfStock && onAdd({ id, product_id, name, selling_price, current_stock, image_url, category_name });
             }}
             disabled={isOutOfStock}
             className={`p-2 rounded-lg transition-colors ${

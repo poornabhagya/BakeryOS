@@ -1,23 +1,15 @@
 import React, { useState } from 'react';
-import { useAuth, UserRole } from '../context/AuthContext';
-import { ChefHat, Lock, User, AlertCircle } from 'lucide-react';
-
-// Mock users for testing (until backend is ready)
-const mockUsers = [
-  { username: 'manager', password: '123', role: 'Manager' as UserRole },
-  { username: 'cashier', password: '123', role: 'Cashier' as UserRole },
-  { username: 'baker', password: '123', role: 'Baker' as UserRole },
-  { username: 'store', password: '123', role: 'Storekeeper' as UserRole },
-];
+import { useAuth } from '../context/AuthContext';
+import { ChefHat, Lock, User, AlertCircle, Loader } from 'lucide-react';
 
 export function LoginScreen() {
-  const { login } = useAuth();
+  const { login, isLoading } = useAuth();
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(''); // Clear previous errors
 
@@ -27,17 +19,19 @@ export function LoginScreen() {
       return;
     }
 
-    // Check against mock users
-    const user = mockUsers.find(
-      u => u.username === username.trim() && u.password === password
-    );
-
-    if (user) {
-      // Successful login
-      login(username, user.role);
-    } else {
-      // Failed login
-      setError('Invalid username or password');
+    try {
+      // Call real backend API
+      await login(username, password);
+      
+      // Successful login - component will re-render automatically
+      // because user state changed in AuthContext
+      // Clear form
+      setUsername('');
+      setPassword('');
+    } catch (err) {
+      // Error is handled by auth context, display it here
+      const errorMessage = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      setError(errorMessage);
     }
   };
 
@@ -78,8 +72,9 @@ export function LoginScreen() {
               <input 
                 type="text" 
                 required
+                disabled={isLoading}
                 style={{ paddingLeft: '3.5rem' }} 
-                className="w-full border-2 border-gray-100 bg-white/60 rounded-full pr-6 py-3 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none transition-all font-medium text-gray-700 placeholder-gray-400 backdrop-blur-sm"
+                className="w-full border-2 border-gray-100 bg-white/60 rounded-full pr-6 py-3 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none transition-all font-medium text-gray-700 placeholder-gray-400 backdrop-blur-sm disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                 placeholder="Enter your username"
                 value={username}
                 onChange={(e) => {
@@ -98,8 +93,9 @@ export function LoginScreen() {
               <input 
                 type="password" 
                 required
+                disabled={isLoading}
                 style={{ paddingLeft: '3.5rem' }} 
-                className="w-full border-2 border-gray-100 bg-white/60 rounded-full pr-6 py-3 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none transition-all font-medium text-gray-700 placeholder-gray-400 backdrop-blur-sm"
+                className="w-full border-2 border-gray-100 bg-white/60 rounded-full pr-6 py-3 focus:ring-4 focus:ring-orange-100 focus:border-orange-500 outline-none transition-all font-medium text-gray-700 placeholder-gray-400 backdrop-blur-sm disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => {
@@ -113,10 +109,20 @@ export function LoginScreen() {
           {/* Login Button */}
           <button 
             type="submit"
-            className="mt-6 w-full bg-orange-600 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 rounded-full shadow-xl shadow-orange-500/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-lg"
+            disabled={isLoading}
+            className="mt-6 w-full bg-orange-600 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-bold py-4 rounded-full shadow-xl shadow-orange-500/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-lg"
           >
-            <Lock className="w-5 h-5" /> 
-            <span>Access System</span>
+            {isLoading ? (
+              <>
+                <Loader className="w-5 h-5 animate-spin" />
+                <span>Signing in...</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-5 h-5" /> 
+                <span>Access System</span>
+              </>
+            )}
           </button>
 
         </form>
