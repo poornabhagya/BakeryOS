@@ -14,17 +14,7 @@
     "noEmit": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-<<<<<<< HEAD
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "allowImportingTsExtensions": true,
-    "moduleResolution": "bundler"
-=======
     "forceConsistentCasingInFileNames": true
->>>>>>> 8c945854961d4e504434ccb2a77bfbdcafde0a1c
   },
   "include": ["src"],
   "exclude": ["node_modules"]
