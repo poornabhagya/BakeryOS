@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Search, RotateCcw, RefreshCw, Eye, Edit, Trash2, Plus, History } from "lucide-react";
+import { Search, RotateCcw, RefreshCw, Eye, Edit, Trash2, Plus, History, Loader } from "lucide-react";
 import { useAuth } from '../context/AuthContext'; // 1. Auth Import එක දැම්මා
+import apiClient from '../services/api';
+import { convertApiProductToUi } from '../utils/conversions';
 
 // Modals
 import DeleteConfirmationModal from './modal/DeleteConfirmationModal';
@@ -22,19 +24,19 @@ import { IngredientCategoryListModal } from './modal/ingredient modal/Ingredient
 type Product = {
   id: string;
   name: string;
-  category: string;
-  price: number;
-  cost: number;
-  quantity: number;
+  category_name: string;
+  selling_price: number;
+  cost_price: number;
+  current_stock: number;
 };
 
 const initialProducts: Product[] = [
-  { id: "#P001", name: "Fish Bun", category: "Buns", price: 80, cost: 45, quantity: 8 },
-  { id: "#P002", name: "Tea Bun", category: "Buns", price: 60, cost: 30, quantity: 25 },
-  { id: "#C001", name: "Butter Cake", category: "Cakes", price: 450, cost: 200, quantity: 5 },
-  { id: "#B001", name: "Sandwich Bread", category: "Bread", price: 190, cost: 110, quantity: 40 },
-  { id: "#D001", name: "Iced Coffee", category: "Drinks", price: 150, cost: 80, quantity: 12 },
-  { id: "#P003", name: "Chicken Roll", category: "Pastry", price: 120, cost: 60, quantity: 0 },
+  { id: "#P001", name: "Fish Bun", category_name: "Buns", selling_price: 80, cost_price: 45, current_stock: 8 },
+  { id: "#P002", name: "Tea Bun", category_name: "Buns", selling_price: 60, cost_price: 30, current_stock: 25 },
+  { id: "#C001", name: "Butter Cake", category_name: "Cakes", selling_price: 450, cost_price: 200, current_stock: 5 },
+  { id: "#B001", name: "Sandwich Bread", category_name: "Bread", selling_price: 190, cost_price: 110, current_stock: 40 },
+  { id: "#D001", name: "Iced Coffee", category_name: "Drinks", selling_price: 150, cost_price: 80, current_stock: 12 },
+  { id: "#P003", name: "Chicken Roll", category_name: "Pastry", selling_price: 120, cost_price: 60, current_stock: 0 },
 ];
 
 // --- Ingredients Type & Mock Data ---
@@ -69,9 +71,45 @@ const StockManagementScreen: React.FC = () => {
   const isStorekeeper = user?.role === 'Storekeeper';
 
   // --- 2. States ---
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [ingredients, setIngredients] = useState<Ingredient[]>(initialIngredients);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [activeTab, setActiveTab] = useState("Products");
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isFetching, setIsFetching] = useState(true);
+
+  // --- Fetch Products from API ---
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setIsFetching(true);
+        setFetchError(null);
+        const response = await apiClient.products.getAll();
+        // Convert API products to UI format and map to Product interface
+        const uiProducts = response.results.map((apiProduct: any) => {
+          const uiProduct = convertApiProductToUi(apiProduct);
+          return {
+            id: uiProduct.id,
+            name: uiProduct.name,
+            category_name: uiProduct.category_name,
+            selling_price: uiProduct.selling_price,
+            cost_price: uiProduct.cost_price,
+            current_stock: uiProduct.current_stock,
+          };
+        });
+        setProducts(uiProducts);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to fetch products';
+        setFetchError(errorMsg);
+        console.error('Error fetching products:', error);
+        // Fall back to initial mock data
+        setProducts(initialProducts);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   // Logic: Storekeeper ආපු ගමන් Tab එක මාරු කරනවා Ingredients වලට
   useEffect(() => {
@@ -97,10 +135,10 @@ const StockManagementScreen: React.FC = () => {
   const [viewItem, setViewItem] = useState<{
     id: string;
     name: string;
-    price?: number;
-    cost?: number;
+    selling_price?: number;
+    cost_price?: number;
     shelfLife?: string;
-    category: string;
+    category_name: string;
   } | null>(null);
   
   const [ingredientDetailsModal, setIngredientDetailsModal] = useState<{ open: boolean, item: any | null }>({ open: false, item: null });
@@ -135,20 +173,20 @@ const StockManagementScreen: React.FC = () => {
     }
 
     if (category !== "All Categories") {
-      list = list.filter((p) => p.category === category);
+      list = list.filter((p) => p.category_name === category);
     }
 
     if (activeTab === "Ingredients" && supplier !== "All Suppliers") {
       list = list.filter((ing) => ing.supplier === supplier);
     }
 
-    if (stockStatus === "Low Stock") list = list.filter((p) => p.quantity > 0 && p.quantity < 10);
-    else if (stockStatus === "In Stock") list = list.filter((p) => p.quantity >= 10);
+    if (stockStatus === "Low Stock") list = list.filter((p) => p.current_stock > 0 && p.current_stock < 10);
+    else if (stockStatus === "In Stock") list = list.filter((p) => p.current_stock >= 10);
 
     if (sortBy === "Name A-Z") list.sort((a, b) => a.name.localeCompare(b.name));
     else if (sortBy === "Name Z-A") list.sort((a, b) => b.name.localeCompare(a.name));
-    else if (sortBy === "Stock Low-High") list.sort((a, b) => a.quantity - b.quantity);
-    else if (sortBy === "Stock High-Low") list.sort((a, b) => b.quantity - a.quantity);
+    else if (sortBy === "Stock Low-High") list.sort((a, b) => a.current_stock - b.current_stock);
+    else if (sortBy === "Stock High-Low") list.sort((a, b) => b.current_stock - a.current_stock);
 
     return list;
   }, [products, ingredients, searchTerm, category, sortBy, stockStatus, supplier, activeTab]);
@@ -323,11 +361,11 @@ const StockManagementScreen: React.FC = () => {
                   <tr key={p.id} className="border-b border-orange-100 hover:bg-[#FFF7F0] transition-colors">
                   <td className="py-3 px-4 text-gray-600">{p.id}</td>
                   <td className="py-3 px-4 font-medium text-gray-800">{p.name}</td>
-                  <td className="py-3 px-4 text-gray-600">{p.category}</td>
+                  <td className="py-3 px-4 text-gray-600">{p.category_name}</td>
                   {activeTab === "Products" ? (
                     <>
-                    <td className="py-3 px-4 font-medium text-gray-800">Rs. {p.price}</td>
-                    <td className="py-3 px-4 text-gray-400">Rs. {p.cost}</td>
+                    <td className="py-3 px-4 font-medium text-gray-800">Rs. {p.selling_price}</td>
+                    <td className="py-3 px-4 text-gray-400">Rs. {p.cost_price}</td>
                     </>
                   ) : (
                     <>
@@ -336,12 +374,12 @@ const StockManagementScreen: React.FC = () => {
                     </>
                   )}
                   <td className="py-3 px-4">
-                    {p.quantity === 0 ? (
+                    {p.current_stock === 0 ? (
                       <span className="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold text-xs">Out of Stock</span>
-                    ) : p.quantity < 10 ? (
-                      <span className="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold text-xs">{p.quantity}{activeTab === "Ingredients" ? ` ${p.unit}` : ''}</span>
+                    ) : p.current_stock < 10 ? (
+                      <span className="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold text-xs">{p.current_stock}{activeTab === "Ingredients" ? ` ${p.unit}` : ''}</span>
                     ) : (
-                      <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-semibold text-xs">{p.quantity}{activeTab === "Ingredients" ? ` ${p.unit}` : ''}</span>
+                      <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-semibold text-xs">{p.current_stock}{activeTab === "Ingredients" ? ` ${p.unit}` : ''}</span>
                     )}
                   </td>
                   
@@ -357,10 +395,10 @@ const StockManagementScreen: React.FC = () => {
                           setViewItem({
                             id: p.id,
                             name: p.name,
-                            price: p.price,
-                            cost: p.cost,
+                            selling_price: p.selling_price,
+                            cost_price: p.cost_price,
                             shelfLife: "3 days",
-                            category: p.category,
+                            category_name: p.category_name,
                           });
                         } else {
                           setIngredientDetailsModal({ open: true, item: p });

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, ArrowLeft, Plus, Search } from 'lucide-react';
-import { AddNewBatchModal } from './AddNewBatchModal';
+import { AddNewBatchModal } from '../components/modal/AddNewBatchModal';
 
 // Mock batch data
 const initialBatches = [

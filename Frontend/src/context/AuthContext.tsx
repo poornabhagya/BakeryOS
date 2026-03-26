@@ -1,70 +1,110 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import apiClient, { setTokens, clearTokens } from '../services/api';
+import { UiUser } from '../utils/apiTypes';
 
 // 1. Roles
 export type UserRole = 'Manager' | 'Cashier' | 'Baker' | 'Storekeeper';
 
-// 2. User Type
-export interface AuthUser {
-  username: string;
-  name: string;
-  role: UserRole;
-  avatarColor?: string;
-}
+// 2. User Type (UI format)
+export type AuthUser = UiUser;
 
 // 3. Context Type
 interface AuthContextType {
   user: AuthUser | null;
-  login: (username: string, role: UserRole) => void;
-  logout: () => void;
+  login: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // --- 🔥 CHANGE: Using sessionStorage instead of localStorage ---
-  // Refresh කළාට මේක මැකෙන්නේ නෑ. (User stays logged in on refresh)
-  // හැබැයි Tab එක වැහුවොත් මේක මැකෙනවා. (New session requires login)
+  // Initialize user from localStorage on mount
   useEffect(() => {
-    const storedUser = sessionStorage.getItem('bakeryUser'); // Changed to sessionStorage
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error("Failed to parse user data", error);
-        sessionStorage.removeItem('bakeryUser');
+    const initializeAuth = () => {
+      const storedUser = localStorage.getItem('bakeryUser');
+      const accessToken = localStorage.getItem('access_token');
+      
+      if (storedUser && accessToken) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+        } catch (err) {
+          console.error('Failed to parse stored user', err);
+          localStorage.removeItem('bakeryUser');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+        }
       }
-    }
+    };
+
+    initializeAuth();
   }, []);
 
-  const login = (username: string, role: UserRole) => {
-    let color = 'bg-gray-500';
-    if (role === 'Manager') color = 'bg-purple-600';
-    if (role === 'Cashier') color = 'bg-green-600';
-    if (role === 'Baker') color = 'bg-orange-600';
-    if (role === 'Storekeeper') color = 'bg-blue-600';
+  const login = async (username: string, password: string) => {
+    setIsLoading(true);
+    setError(null);
 
-    const newUser: AuthUser = {
-      username,
-      name: username.charAt(0).toUpperCase() + username.slice(1),
-      role,
-      avatarColor: color
-    };
-    
-    setUser(newUser);
-    // Save to sessionStorage (Session only)
-    sessionStorage.setItem('bakeryUser', JSON.stringify(newUser)); 
+    try {
+      // Call backend API (tokens are automatically stored in api.ts)
+      const response = await apiClient.auth.login(username, password);
+      
+      // Extract data from response
+      const { user } = response;
+
+      // Store user in state and localStorage
+      setUser(user);
+      localStorage.setItem('bakeryUser', JSON.stringify(user));
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const logout = () => {
-    setUser(null);
-    sessionStorage.removeItem('bakeryUser'); // Clear from session
+  const logout = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Call backend logout
+      await apiClient.auth.logout();
+    } catch (err) {
+      console.error('Logout error:', err);
+      // Proceed with local cleanup even if API call fails
+    } finally {
+      // Clear local state and storage
+      setUser(null);
+      localStorage.removeItem('bakeryUser');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      
+      // Clear API tokens
+      clearTokens();
+      
+      setIsLoading(false);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        logout,
+        isAuthenticated: !!user,
+        isLoading,
+        error
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

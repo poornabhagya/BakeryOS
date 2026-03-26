@@ -1,5 +1,6 @@
 import React from 'react';
 import { Clock } from 'lucide-react';
+import { toNumber, subtractNumeric } from '../../utils/numericUtils';
 
 interface Ingredient {
   name: string;
@@ -13,10 +14,10 @@ interface ViewProductModalProps {
   item: {
     id: string;
     name: string;
-    price?: number;
-    cost?: number;
+    selling_price?: number;
+    cost_price?: number;
     shelfLife?: string;
-    category: string;
+    category_name: string;
   } | null;
 }
 
@@ -32,7 +33,8 @@ function getMockIngredients(itemId: string): Ingredient[] {
 export const ViewProductModal: React.FC<ViewProductModalProps> = ({ isOpen, onClose, item }) => {
   if (!isOpen || !item) return null;
   const ingredients = getMockIngredients(item.id);
-  const profit = (item.price ?? 0) - (item.cost ?? 0);
+  // Safely calculate profit even if prices come as strings from API
+  const profit = subtractNumeric(toNumber(item.selling_price), toNumber(item.cost_price));
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -42,7 +44,7 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({ isOpen, onCl
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-2xl font-extrabold text-gray-900 leading-tight mr-2 tracking-tight drop-shadow-sm">{item.name}</h2>
             <span className="inline-block px-2 py-1 bg-orange-200 text-orange-800 text-xs font-semibold rounded-full tracking-wide shadow-sm border border-orange-300">{item.id}</span>
-            <span className="inline-block px-2 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full ml-2 border border-orange-200">{item.category}</span>
+            <span className="inline-block px-2 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full ml-2 border border-orange-200">{item.category_name}</span>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-orange-100 active:bg-orange-200 transition-colors duration-150" aria-label="Close">
             <span className="text-gray-400 text-2xl">×</span>
@@ -56,15 +58,15 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({ isOpen, onCl
         <div className="flex w-full border border-orange-100 rounded-2xl overflow-hidden mb-6 shadow-md bg-gradient-to-r from-orange-50/60 to-white/60">
           <div className="flex-1 min-w-0 p-5 text-center bg-white/90 border-r border-orange-100 last:border-r-0 flex flex-col justify-center hover:bg-orange-50/60 transition-colors duration-150">
             <div className="text-xs text-gray-500 font-semibold uppercase mb-1 tracking-wide">Selling Price</div>
-            <div className="text-xl font-extrabold text-green-600 drop-shadow-sm">Rs. {typeof item.price === 'number' ? item.price.toFixed(2) : '--'}</div>
+            <div className="text-xl font-extrabold text-green-600 drop-shadow-sm">Rs. {toNumber(item.selling_price).toFixed(2)}</div>
           </div>
           <div className="flex-1 min-w-0 p-5 text-center bg-white/90 border-r border-orange-100 last:border-r-0 flex flex-col justify-center hover:bg-orange-50/60 transition-colors duration-150">
             <div className="text-xs text-gray-500 font-semibold uppercase mb-1 tracking-wide">Cost Price</div>
-            <div className="text-base font-semibold text-gray-500">Rs. {typeof item.cost === 'number' ? item.cost.toFixed(2) : '--'}</div>
+            <div className="text-base font-semibold text-gray-500">Rs. {toNumber(item.cost_price).toFixed(2)}</div>
           </div>
           <div className="flex-1 min-w-0 p-5 text-center bg-white/90 border-r border-orange-100 last:border-r-0 flex flex-col justify-center hover:bg-orange-50/60 transition-colors duration-150">
             <div className="text-xs text-gray-500 font-semibold uppercase mb-1 tracking-wide">Margin</div>
-            <div className="text-base font-bold text-orange-600">Rs. {typeof item.price === 'number' && typeof item.cost === 'number' ? profit.toFixed(2) : '--'}</div>
+            <div className="text-base font-bold text-orange-600">Rs. {profit.toFixed(2)}</div>
           </div>
           <div className="flex-1 min-w-0 p-5 text-center bg-white/90 flex flex-col justify-center hover:bg-orange-50/60 transition-colors duration-150">
             <div className="text-xs text-gray-500 font-semibold uppercase mb-1 tracking-wide">Shelf Life</div>

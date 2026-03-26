@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Card } from './ui/card';
-import { Tag, Zap, Edit, Trash2, Plus, Search, ToggleLeft } from 'lucide-react';
+import { Tag, Zap, Edit, Trash2, Plus, Search, ToggleLeft, Loader } from 'lucide-react';
 import { AddDiscountModal } from './modal/AddDiscountModal';
 import { EditDiscountModal } from './modal/EditDiscountModal';
 import { useAuth } from '../context/AuthContext'; // 1. Auth Import
+import apiClient from '../services/api';
 
 type Discount = {
   id: string;
@@ -26,7 +27,44 @@ export default function DiscountManagement() {
   // 3. Define Permission: Only Manager has full access
   const isManager = user?.role === 'Manager';
 
-  const [discounts, setDiscounts] = useState<Discount[]>(mockDiscounts);
+  // --- State: API Data ---
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // --- Fetch Discounts from API ---
+  useEffect(() => {
+    const fetchDiscounts = async () => {
+      try {
+        setIsLoading(true);
+        setFetchError(null);
+        const response = await apiClient.discounts.getAll();
+        // Convert API discounts to UI format
+        const uiDiscounts = response.results.map((apiDiscount: any) => ({
+          id: apiDiscount.id,
+          name: apiDiscount.name,
+          kind: apiDiscount.kind,
+          value: apiDiscount.value,
+          applicableTo: apiDiscount.applicable_to || 'All Items',
+          validity: apiDiscount.validity || 'Always',
+          active: apiDiscount.status === 'active',
+        }));
+        setDiscounts(uiDiscounts);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to fetch discounts';
+        setFetchError(errorMsg);
+        console.error('Error fetching discounts:', error);
+        // Fall back to mock data
+        setDiscounts(mockDiscounts);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDiscounts();
+  }, []);
+
+  // --- Additional State ---
   const [addDiscountOpen, setAddDiscountOpen] = useState(false);
   const [editDiscountOpen, setEditDiscountOpen] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState<any | null>(null);

@@ -1,27 +1,66 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Card } from './ui/card';
-import { Banknote, ReceiptText, TrendingUp, Eye, Printer, Search, RotateCcw } from 'lucide-react';
+import { Banknote, ReceiptText, TrendingUp, Eye, Printer, Search, RotateCcw, Loader } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { toNumber } from '../utils/numericUtils';
+import apiClient from '../services/api';
+import { convertApiSaleToUi } from '../utils/conversions';
 
 type Sale = {
-  id: string;
-  date: string; // yyyy-mm-dd
-  time: string; // hh:mm AM/PM
-  items: string; // items summary
-  total: number;
+  id: number;                      // integer PK
+  bill_number: string;             // "BILL-1001"
+  cashier_id: number;
+  cashier_name: string;
+  subtotal: number;
+  discount_id: number | null;
+  discount_name: string | null;
+  discount_amount: number;
+  total_amount: number;            // Renamed from 'total'
+  payment_method: string;
+  item_count: number;
+  date_time: string;               // ISO datetime string
+  created_at: string;
 };
 
 const mockSales: Sale[] = [
-  { id: '#ORD-1001', date: new Date().toISOString().slice(0,10), time: '09:12 AM', items: 'Fish Bun x2, Iced Coffee x1', total: 7000 },
-  { id: '#ORD-1002', date: new Date().toISOString().slice(0,10), time: '10:05 AM', items: 'Tea Bun x3', total: 5000 },
-  { id: '#ORD-1003', date: new Date().toISOString().slice(0,10), time: '11:30 AM', items: 'Butter Cake x1, Coffee x2', total: 4000 },
-  { id: '#ORD-1004', date: new Date().toISOString().slice(0,10), time: '01:20 PM', items: 'Sandwich Bread x4', total: 3000 },
-  { id: '#ORD-1005', date: new Date().toISOString().slice(0,10), time: '03:45 PM', items: 'Iced Coffee x3', total: 2400 },
-  { id: '#ORD-1006', date: new Date().toISOString().slice(0,10), time: '05:10 PM', items: 'Chicken Roll x2', total: 4000 },
+  { id: 1, bill_number: 'BILL-1001', cashier_id: 1, cashier_name: 'Cashier1', subtotal: 7200, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 7000, payment_method: 'Cash', item_count: 3, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
+  { id: 2, bill_number: 'BILL-1002', cashier_id: 1, cashier_name: 'Cashier1', subtotal: 5100, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 5000, payment_method: 'Card', item_count: 3, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
+  { id: 3, bill_number: 'BILL-1003', cashier_id: 2, cashier_name: 'Cashier2', subtotal: 4100, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 4000, payment_method: 'Cash', item_count: 3, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
+  { id: 4, bill_number: 'BILL-1004', cashier_id: 1, cashier_name: 'Cashier1', subtotal: 3100, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 3000, payment_method: 'Cash', item_count: 4, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
+  { id: 5, bill_number: 'BILL-1005', cashier_id: 2, cashier_name: 'Cashier2', subtotal: 2500, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 2400, payment_method: 'Card', item_count: 3, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
+  { id: 6, bill_number: 'BILL-1006', cashier_id: 1, cashier_name: 'Cashier1', subtotal: 4100, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 4000, payment_method: 'Cash', item_count: 2, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
 ];
 
 export function SalesSummary() {
+  // --- State: API Data ---
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // --- Fetch Sales from API ---
+  useEffect(() => {
+    const fetchSales = async () => {
+      try {
+        setIsLoading(true);
+        setFetchError(null);
+        const response = await apiClient.sales.getAll();
+        // Convert API sales to UI format
+        const uiSales = response.results.map(convertApiSaleToUi);
+        setSales(uiSales);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to fetch sales';
+        setFetchError(errorMsg);
+        console.error('Error fetching sales:', error);
+        // Fall back to mock data on error
+        setSales(mockSales);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSales();
+  }, []);
   const today = new Date().toISOString().slice(0,10);
   const defaultFrom = new Date(1970,0,1).toISOString().slice(0,10);
   const [timePeriod, setTimePeriod] = useState<string>('All Time');
@@ -32,9 +71,11 @@ export function SalesSummary() {
 
   const filtered = useMemo(() => {
     return mockSales.filter(s => {
-      if (s.date < dateFrom || s.date > dateTo) return false;
-      if (searchId.trim() && !s.id.toLowerCase().includes(searchId.trim().toLowerCase())) return false;
-      if (amountFilter === 'High' && s.total <= 1000) return false;
+      const saleDate = new Date(s.date_time).toISOString().slice(0, 10);
+      if (saleDate < dateFrom || saleDate > dateTo) return false;
+      if (searchId.trim() && !s.bill_number.toLowerCase().includes(searchId.trim().toLowerCase())) return false;
+      // Safely compare total_amount that might come as string from API
+      if (amountFilter === 'High' && toNumber(s.total_amount) <= 1000) return false;
       return true;
     });
   }, [dateFrom, dateTo, searchId, amountFilter]);
@@ -70,14 +111,18 @@ export function SalesSummary() {
     setDateTo(toIso(end));
   };
 
-  const totalRevenue = useMemo(() => filtered.reduce((sum, s) => sum + s.total, 0), [filtered]);
+  const totalRevenue = useMemo(() => {
+    // Safely convert total_amount that might be strings from backend API
+    return filtered.reduce((sum, s) => sum + toNumber(s.total_amount), 0);
+  }, [filtered]);
   const totalTransactions = filtered.length;
-  const avgOrder = totalTransactions ? Math.round(totalRevenue / totalTransactions) : 0;
+  const avgOrder = totalTransactions ? Math.round(toNumber(totalRevenue) / totalTransactions) : 0;
 
-  const formatDateTime = (dStr: string, tStr: string) => {
-    const d = new Date(dStr);
+  const formatDateTime = (dateTimeStr: string) => {
+    const d = new Date(dateTimeStr);
     const datePart = d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
-    return `${datePart}, ${tStr}`;
+    const timePart = d.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${datePart}, ${timePart}`;
   };
 
   const resetFilters = () => {
@@ -210,10 +255,10 @@ export function SalesSummary() {
             <tbody>
               {filtered.map(s => (
                 <tr key={s.id} className="border-b border-green-100 hover:bg-[#F0FFF4] transition-colors">
-                  <td className="py-3 px-4 font-medium text-green-900">{s.id}</td>
-                  <td className="py-3 px-4 text-green-700">{formatDateTime(s.date, s.time)}</td>
-                  <td className="py-3 px-4 text-gray-700">{s.items}</td>
-                  <td className="py-3 px-4 font-bold text-emerald-700">Rs. {s.total.toLocaleString()}</td>
+                  <td className="py-3 px-4 font-medium text-green-900">{s.bill_number}</td>
+                  <td className="py-3 px-4 text-green-700">{formatDateTime(s.date_time)}</td>
+                  <td className="py-3 px-4 text-gray-700">{s.item_count} items</td>
+                  <td className="py-3 px-4 font-bold text-emerald-700">Rs. {s.total_amount.toLocaleString()}</td>
                   <td className="py-3 px-4 flex gap-2">
                     <button title="View" className="px-3 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                       <Eye className="w-4 h-4" /> View
