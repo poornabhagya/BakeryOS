@@ -99,22 +99,19 @@ export function UserManagement() {
         setIsLoading(true);
         setFetchError(null);
         const response = await apiClient.users.getAll();
-        // Convert API users to UI format (StaffMember)
-        const uiUsers = response.results.map((apiUser: any) => {
-          const uiUser = convertApiUserToUi(apiUser);
-          return {
-            id: uiUser.id,
-            employeeId: uiUser.employee_id,
-            name: uiUser.name,
-            nic: uiUser.contact, // Map contact to NIC for now
-            role: uiUser.role,
-            roleColor: getRoleColor(uiUser.role),
-            status: (uiUser.status === 'active' ? 'Active' : 'Inactive') as 'Active' | 'Inactive',
-            contact: uiUser.contact,
-            lastLogin: 'N/A', // Backend doesn't track this
-            avatarColor: uiUser.avatarColor,
-          };
-        });
+        // response.items already contains UI-formatted users
+        const uiUsers = response.items.map((uiUser: any) => ({
+          id: uiUser.id,
+          employeeId: uiUser.employee_id,
+          name: uiUser.name,
+          nic: uiUser.contact, // Map contact to NIC for now
+          role: uiUser.role,
+          roleColor: getRoleColor(uiUser.role),
+          status: (uiUser.status === 'active' ? 'Active' : 'Inactive') as 'Active' | 'Inactive',
+          contact: uiUser.contact,
+          lastLogin: 'N/A', // Backend doesn't track this
+          avatarColor: uiUser.avatarColor,
+        }));
         setStaff(uiUsers);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Failed to fetch users';

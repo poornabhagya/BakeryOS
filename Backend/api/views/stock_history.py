@@ -3,7 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
-from django_filters.rest_framework import DjangoFilterBackend
+# django_filters removed due to Django 6.0 compatibility
+# from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
 from django.db.models import Q
 from datetime import datetime, timedelta
@@ -42,9 +43,10 @@ class ProductStockHistoryViewSet(OptimizedQueryMixin, viewsets.ReadOnlyModelView
     """
     
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filter_backends = [OrderingFilter]
     pagination_class = StockHistoryPagination
-    filterset_fields = ['product_id', 'transaction_type']
+    # filterset_fields disabled due to django_filters incompatibility
+    # filterset_fields = ['product_id', 'transaction_type']
     ordering = ['-created_at']
     ordering_fields = ['created_at', 'change_amount', 'qty_before']
     
@@ -180,9 +182,10 @@ class IngredientStockHistoryViewSet(OptimizedQueryMixin, viewsets.ReadOnlyModelV
     """
     
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filter_backends = [OrderingFilter]
     pagination_class = StockHistoryPagination
-    filterset_fields = ['ingredient_id', 'batch_id', 'transaction_type']
+    # filterset_fields disabled due to django_filters incompatibility
+    # filterset_fields = ['ingredient_id', 'batch_id', 'transaction_type']
     ordering = ['-created_at']
     ordering_fields = ['created_at', 'change_amount', 'qty_before']
     

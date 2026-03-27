@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { TrendingDown, Trash2, AlertCircle, Search, RotateCcw, Plus, Eye } from 'lucide-react';
 import { Card } from './ui/card';
 import jsPDF from 'jspdf';
@@ -6,6 +6,7 @@ import html2canvas from 'html2canvas';
 import { AddWastageReasonModal } from './modal/AddWastageReasonModal';
 import { ViewWastageReasonsModal, WastageReason } from './modal/ViewWastageReasonsModal';
 import { multiplyNumeric } from '../utils/numericUtils';
+import { wastageApi } from '../services/api';
 
 type WastageItem = {
   id: string;
@@ -20,20 +21,6 @@ type WastageItem = {
   date: string; // yyyy-mm-dd
 };
 
-// --- Mock Data: Product Wastage ---
-const productWastage: WastageItem[] = [
-  { id: '#PW001', name: 'Fish Bun', category: 'Buns', reason: 'Expired', quantity: 10, unit: 'pcs', unitCost: 80, reportedBy: 'Ayesha', time: '09:30 AM', date: new Date().toISOString().slice(0,10) },
-  { id: '#PW002', name: 'Tea Bun', category: 'Buns', reason: 'Damaged', quantity: 2, unit: 'pcs', unitCost: 60, reportedBy: 'Samuel', time: '11:10 AM', date: new Date().toISOString().slice(0,10) },
-  { id: '#PW003', name: 'Butter Cake', category: 'Cakes', reason: 'Burnt', quantity: 1, unit: 'pcs', unitCost: 450, reportedBy: 'Leah', time: '02:15 PM', date: new Date().toISOString().slice(0,10) },
-];
-
-// --- Mock Data: Ingredient Wastage ---
-const ingredientWastage: WastageItem[] = [
-  { id: '#IW001', name: 'All-Purpose Flour', category: 'Flour', reason: 'Spilled', quantity: 5, unit: 'kg', unitCost: 40, reportedBy: 'Kamal', time: '08:45 AM', date: new Date().toISOString().slice(0,10) },
-  { id: '#IW002', name: 'Butter', category: 'Dairy', reason: 'Stale', quantity: 2, unit: 'kg', unitCost: 220, reportedBy: 'Meera', time: '10:05 AM', date: new Date().toISOString().slice(0,10) },
-  { id: '#IW003', name: 'Cinnamon', category: 'Spices', reason: 'Expired', quantity: 1, unit: 'kg', unitCost: 150, reportedBy: 'Jamal', time: '03:20 PM', date: new Date().toISOString().slice(0,10) },
-];
-
 export function WastageOverview() {
   const today = new Date().toISOString().slice(0,10);
   const [dateFrom, setDateFrom] = useState<string>(today);
@@ -46,6 +33,63 @@ export function WastageOverview() {
   const [viewReasonsOpen, setViewReasonsOpen] = useState(false);
   const [wastageReasons, setWastageReasons] = useState<WastageReason[]>([]);
 
+  const [productWastage, setProductWastage] = useState<WastageItem[]>([]);
+  const [ingredientWastage, setIngredientWastage] = useState<WastageItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Fetch wastage data from API
+  useEffect(() => {
+    const fetchWastageData = async () => {
+      try {
+        setIsLoading(true);
+        setFetchError(null);
+
+        const response = await wastageApi.getAll();
+        const wastageItems = response.items || [];
+
+        // Separate product wastage (IDs like 'PW-001') from ingredient wastage (IDs like 'IW-001')
+        const products: WastageItem[] = [];
+        const ingredients: WastageItem[] = [];
+
+        wastageItems.forEach((item: any) => {
+          const wastageId = item.wastage_id || '';
+          
+          // Transform API response to WastageItem format
+          const transformedItem: WastageItem = {
+            id: wastageId,
+            name: item.product_id?.name || item.ingredient_id?.name || 'Unknown',
+            category: item.product_id?.category_id?.name || item.ingredient_id?.category_id?.name || 'Unknown',
+            reason: item.reason_id?.description || 'Unknown',
+            quantity: item.quantity || 0,
+            unit: 'Unit', // Default unit, adjust if API provides units
+            unitCost: item.unit_cost || 0,
+            reportedBy: item.reported_by?.full_name || item.reported_by?.username || 'System',
+            time: new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            date: new Date(item.created_at).toISOString().slice(0, 10),
+          };
+
+          // Distinguish product vs ingredient wastage by ID prefix
+          if (wastageId.startsWith('PW')) {
+            products.push(transformedItem);
+          } else if (wastageId.startsWith('IW')) {
+            ingredients.push(transformedItem);
+          }
+        });
+
+        setProductWastage(products);
+        setIngredientWastage(ingredients);
+      } catch (error) {
+        console.error('Error fetching wastage data:', error);
+        setFetchError('Failed to load wastage data. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchWastageData();
+  }, []);
+
   const filteredProduct = useMemo(() => {
     return productWastage.filter((i) => {
       if (i.date < dateFrom || i.date > dateTo) return false;
@@ -56,7 +100,7 @@ export function WastageOverview() {
       }
       return true;
     });
-  }, [dateFrom, dateTo, reason, searchTerm]);
+  }, [productWastage, dateFrom, dateTo, reason, searchTerm]);
 
   const filteredIngredient = useMemo(() => {
     return ingredientWastage.filter((i) => {
@@ -68,7 +112,7 @@ export function WastageOverview() {
       }
       return true;
     });
-  }, [dateFrom, dateTo, reason, searchTerm]);
+  }, [ingredientWastage, dateFrom, dateTo, reason, searchTerm]);
 
   // When timePeriod changes, update dateFrom/dateTo accordingly
   const applyTimePeriod = (period: string) => {
@@ -197,173 +241,196 @@ export function WastageOverview() {
         reasons={wastageReasons}
         onDelete={handleDeleteWastageReason}
       />
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="p-4 rounded-xl shadow-sm flex items-center gap-4 bg-red-50 border border-red-200">
-          <div className="p-3 rounded bg-white text-red-500">
-            <TrendingDown className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-sm text-red-800 font-semibold">Total Loss Today</div>
-            <div className="text-lg font-bold text-red-600">Rs. {totalLoss.toLocaleString()}</div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="spinner mb-4 mx-auto w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+            <p className="text-gray-600">Loading wastage data...</p>
           </div>
         </div>
+      )}
 
-        <div className="p-4 rounded-xl shadow-sm flex items-center gap-4 bg-orange-50 border border-orange-200">
-          <div className="p-3 rounded bg-white text-orange-500">
-            <Trash2 className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-sm text-orange-800 font-semibold">Total Wasted Qty</div>
-            <div className="text-lg font-bold text-orange-700">{totalQty}</div>
-          </div>
+      {/* Error State */}
+      {fetchError && (
+        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600" />
+          <p className="text-red-700">{fetchError}</p>
         </div>
+      )}
 
-        <div className="p-4 rounded-xl shadow-sm flex items-center gap-4 bg-blue-50 border border-blue-200">
-          <div className="p-3 rounded bg-white text-blue-500">
-            <AlertCircle className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-sm text-blue-800 font-semibold">Most Wasted Item</div>
-            <div className="text-lg font-bold text-blue-700">{mostWasted ? `${mostWasted.name} (${mostWasted.quantity} ${mostWasted.unit})` : '—'}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Global Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
-        <div className="flex flex-wrap gap-4 items-center">
-
-          <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-300 w-4 h-4" />
-              <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by name..." className="pl-10 px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-900 w-64" />
+      {/* Main Content */}
+      {!isLoading && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="p-4 rounded-xl shadow-sm flex items-center gap-4 bg-red-50 border border-red-200">
+              <div className="p-3 rounded bg-white text-red-500">
+                <TrendingDown className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-sm text-red-800 font-semibold">Total Loss Today</div>
+                <div className="text-lg font-bold text-red-600">Rs. {totalLoss.toLocaleString()}</div>
+              </div>
             </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">Date Range</label>
-            <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setTimePeriod('Custom'); }} className="px-3 py-2 rounded-lg border border-orange-100 bg-orange-50 text-orange-900" />
-            <span className="text-gray-400">to</span>
-            <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setTimePeriod('Custom'); }} className="px-3 py-2 rounded-lg border border-orange-100 bg-orange-50 text-orange-900" />
-          </div>
-
-          <select value={timePeriod} onChange={(e) => { setTimePeriod(e.target.value); applyTimePeriod(e.target.value); }} className="px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-900">
-            <option>All Time</option>
-            <option>Today</option>
-            <option>This Week</option>
-            <option>This Month</option>
-            <option>This Year</option>
-          </select>
-
-          <select value={reason} onChange={(e) => setReason(e.target.value)} className="px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-900">
-            <option>All Reasons</option>
-            <option>Expired</option>
-            <option>Burnt</option>
-            <option>Stale</option>
-            <option>Damaged</option>
-            <option>Spilled</option>
-          </select>
-
-          <button onClick={resetFilters} className="ml-2 text-red-500 hover:text-red-700 flex items-center gap-1 font-medium text-sm">
-              <RotateCcw className="w-4 h-4" /> Reset Filters
-            </button>            
-
-          <div className="relative ml-auto flex items-center gap-3">
-
-            <button onClick={exportToPDF} className="ml-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-bold shadow hover:bg-orange-600 flex items-center gap-2 transition-colors">
-              Export PDF
-            </button>
-
-            <button
-              className="ml-2 px-4 py-2 rounded-lg bg-green-500 text-white font-bold shadow hover:bg-green-600 flex items-center gap-2 transition-colors"
-              onClick={() => setAddReasonOpen(true)}
-            >
-              <Plus className="w-4 h-4" /> Add Wastage Reason
-            </button>
-
-            <button
-              className="ml-2 px-4 py-2 rounded-lg bg-green-500 text-white font-bold shadow hover:bg-green-600 flex items-center gap-2 transition-colors"
-              onClick={() => setViewReasonsOpen(true)}
-            >
-              <Eye className="w-4 h-4" /> View Wastage Reasons
-            </button>
-
-            
-          </div>
-        </div>
-      </div>
-
-      {/* Dual Tables Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Product Wastage Table */}
-        <div className="bg-white rounded-lg border border-orange-100 overflow-hidden wastage-table">
-          <div className="rounded-t-lg bg-orange-100 p-4 flex items-center justify-between">
-              <h4 className="font-semibold text-orange-700">Product Wastage</h4>
+            <div className="p-4 rounded-xl shadow-sm flex items-center gap-4 bg-orange-50 border border-orange-200">
+              <div className="p-3 rounded bg-white text-orange-500">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-sm text-orange-800 font-semibold">Total Wasted Qty</div>
+                <div className="text-lg font-bold text-orange-700">{totalQty}</div>
+              </div>
             </div>
-            <div className="p-4 overflow-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-orange-50 text-orange-700">
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Item Name</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Category</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Reason</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Quantity</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Loss Amount</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Reported By</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Date & Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProduct.map((r) => (
-                  <tr key={r.id} className="border-b border-orange-100 hover:bg-[#FFF7F0] transition-colors">
-                    <td className="py-3 px-4 font-medium text-gray-800">{r.name}</td>
-                    <td className="py-3 px-4 text-gray-600">{r.category}</td>
-                    <td className="py-3 px-4"> <span className={reasonBadge(r.reason)}>{r.reason}</span> </td>
-                    <td className="py-3 px-4 text-gray-800">{r.quantity} {r.unit}</td>
-                    <td className="py-3 px-4 text-red-700">Rs. {multiplyNumeric(r.unitCost, r.quantity).toLocaleString()}</td>
-                    <td className="py-3 px-4 text-gray-600">{r.reportedBy}</td>
-                    <td className="py-3 px-4 text-gray-600">{formatDateDisplay(r.date, r.time)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
 
-        {/* Ingredient Wastage Table */}
-        <div className="bg-white rounded-lg border border-orange-100 overflow-hidden wastage-table">
-          <div className="rounded-t-lg bg-orange-100 p-4 flex items-center justify-between">
-              <h4 className="font-semibold text-orange-700">Ingredient Wastage</h4>
+            <div className="p-4 rounded-xl shadow-sm flex items-center gap-4 bg-blue-50 border border-blue-200">
+              <div className="p-3 rounded bg-white text-blue-500">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-sm text-blue-800 font-semibold">Most Wasted Item</div>
+                <div className="text-lg font-bold text-blue-700">{mostWasted ? `${mostWasted.name} (${mostWasted.quantity} ${mostWasted.unit})` : '—'}</div>
+              </div>
             </div>
-            <div className="p-4 overflow-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-orange-50 text-orange-700">
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Item Name</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Category</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Reason</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Quantity</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Loss Amount</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Reported By</th>
-                  <th className="py-3 px-4 font-semibold border-b border-orange-200">Date & Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredIngredient.map((r) => (
-                  <tr key={r.id} className="border-b border-orange-100 hover:bg-[#FFF7F0] transition-colors">
-                    <td className="py-3 px-4 font-medium text-gray-800">{r.name}</td>
-                    <td className="py-3 px-4 text-gray-600">{r.category}</td>
-                    <td className="py-3 px-4"> <span className={reasonBadge(r.reason)}>{r.reason}</span> </td>
-                    <td className="py-3 px-4 text-gray-800">{r.quantity} {r.unit}</td>
-                    <td className="py-3 px-4 text-red-700">Rs. {multiplyNumeric(r.unitCost, r.quantity).toLocaleString()}</td>
-                    <td className="py-3 px-4 text-gray-600">{r.reportedBy}</td>
-                    <td className="py-3 px-4 text-gray-600">{formatDateDisplay(r.date, r.time)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
-        </div>
-      </div>
+
+          {/* Global Filters */}
+          <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
+            <div className="flex flex-wrap gap-4 items-center">
+
+              <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-300 w-4 h-4" />
+                  <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by name..." className="pl-10 px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-900 w-64" />
+                </div>
+
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Date Range</label>
+                <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setTimePeriod('Custom'); }} className="px-3 py-2 rounded-lg border border-orange-100 bg-orange-50 text-orange-900" />
+                <span className="text-gray-400">to</span>
+                <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setTimePeriod('Custom'); }} className="px-3 py-2 rounded-lg border border-orange-100 bg-orange-50 text-orange-900" />
+              </div>
+
+              <select value={timePeriod} onChange={(e) => { setTimePeriod(e.target.value); applyTimePeriod(e.target.value); }} className="px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-900">
+                <option>All Time</option>
+                <option>Today</option>
+                <option>This Week</option>
+                <option>This Month</option>
+                <option>This Year</option>
+              </select>
+
+              <select value={reason} onChange={(e) => setReason(e.target.value)} className="px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-900">
+                <option>All Reasons</option>
+                <option>Expired</option>
+                <option>Burnt</option>
+                <option>Stale</option>
+                <option>Damaged</option>
+                <option>Spilled</option>
+              </select>
+
+              <button onClick={resetFilters} className="ml-2 text-red-500 hover:text-red-700 flex items-center gap-1 font-medium text-sm">
+                  <RotateCcw className="w-4 h-4" /> Reset Filters
+                </button>            
+
+              <div className="relative ml-auto flex items-center gap-3">
+
+                <button onClick={exportToPDF} className="ml-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-bold shadow hover:bg-orange-600 flex items-center gap-2 transition-colors">
+                  Export PDF
+                </button>
+
+                <button
+                  className="ml-2 px-4 py-2 rounded-lg bg-green-500 text-white font-bold shadow hover:bg-green-600 flex items-center gap-2 transition-colors"
+                  onClick={() => setAddReasonOpen(true)}
+                >
+                  <Plus className="w-4 h-4" /> Add Wastage Reason
+                </button>
+
+                <button
+                  className="ml-2 px-4 py-2 rounded-lg bg-green-500 text-white font-bold shadow hover:bg-green-600 flex items-center gap-2 transition-colors"
+                  onClick={() => setViewReasonsOpen(true)}
+                >
+                  <Eye className="w-4 h-4" /> View Wastage Reasons
+                </button>
+
+                
+              </div>
+            </div>
+          </div>
+
+          {/* Dual Tables Grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Product Wastage Table */}
+            <div className="bg-white rounded-lg border border-orange-100 overflow-hidden wastage-table">
+              <div className="rounded-t-lg bg-orange-100 p-4 flex items-center justify-between">
+                  <h4 className="font-semibold text-orange-700">Product Wastage</h4>
+                </div>
+                <div className="p-4 overflow-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-orange-50 text-orange-700">
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Item Name</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Category</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Reason</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Quantity</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Loss Amount</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Reported By</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Date & Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProduct.map((r) => (
+                      <tr key={r.id} className="border-b border-orange-100 hover:bg-[#FFF7F0] transition-colors">
+                        <td className="py-3 px-4 font-medium text-gray-800">{r.name}</td>
+                        <td className="py-3 px-4 text-gray-600">{r.category}</td>
+                        <td className="py-3 px-4"> <span className={reasonBadge(r.reason)}>{r.reason}</span> </td>
+                        <td className="py-3 px-4 text-gray-800">{r.quantity} {r.unit}</td>
+                        <td className="py-3 px-4 text-red-700">Rs. {multiplyNumeric(r.unitCost, r.quantity).toLocaleString()}</td>
+                        <td className="py-3 px-4 text-gray-600">{r.reportedBy}</td>
+                        <td className="py-3 px-4 text-gray-600">{formatDateDisplay(r.date, r.time)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Ingredient Wastage Table */}
+            <div className="bg-white rounded-lg border border-orange-100 overflow-hidden wastage-table">
+              <div className="rounded-t-lg bg-orange-100 p-4 flex items-center justify-between">
+                  <h4 className="font-semibold text-orange-700">Ingredient Wastage</h4>
+                </div>
+                <div className="p-4 overflow-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-orange-50 text-orange-700">
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Item Name</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Category</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Reason</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Quantity</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Loss Amount</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Reported By</th>
+                      <th className="py-3 px-4 font-semibold border-b border-orange-200">Date & Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredIngredient.map((r) => (
+                      <tr key={r.id} className="border-b border-orange-100 hover:bg-[#FFF7F0] transition-colors">
+                        <td className="py-3 px-4 font-medium text-gray-800">{r.name}</td>
+                        <td className="py-3 px-4 text-gray-600">{r.category}</td>
+                        <td className="py-3 px-4"> <span className={reasonBadge(r.reason)}>{r.reason}</span> </td>
+                        <td className="py-3 px-4 text-gray-800">{r.quantity} {r.unit}</td>
+                        <td className="py-3 px-4 text-red-700">Rs. {multiplyNumeric(r.unitCost, r.quantity).toLocaleString()}</td>
+                        <td className="py-3 px-4 text-gray-600">{r.reportedBy}</td>
+                        <td className="py-3 px-4 text-gray-600">{formatDateDisplay(r.date, r.time)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </Card>
   );
 }

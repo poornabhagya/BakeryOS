@@ -39,8 +39,8 @@ export default function DiscountManagement() {
         setIsLoading(true);
         setFetchError(null);
         const response = await apiClient.discounts.getAll();
-        // Convert API discounts to UI format
-        const uiDiscounts = response.results.map((apiDiscount: any) => ({
+        // response.items already contains UI-formatted discounts
+        const uiDiscounts = response.items.map((apiDiscount: any) => ({
           id: apiDiscount.id,
           name: apiDiscount.name,
           kind: apiDiscount.kind,

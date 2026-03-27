@@ -4,7 +4,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import F, Q
 from django.utils import timezone
-from django_filters.rest_framework import DjangoFilterBackend
+# django_filters removed due to Django 6.0 compatibility
+# from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.pagination import PageNumberPagination
 
@@ -61,29 +62,29 @@ class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
     
     queryset = Product.objects.all()
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filter_backends = [SearchFilter, OrderingFilter]
     pagination_class = ProductPagination
     
     # Query optimization profiles
     optimized_relations = {
         'list': {
-            'select_related': ['category'],
+            'select_related': ['category_id'],
             'prefetch_related': [],
         },
         'retrieve': {
-            'select_related': ['category'],
+            'select_related': ['category_id'],
             'prefetch_related': ['batches', 'stock_history'],
         },
         'low_stock': {
-            'select_related': ['category'],
+            'select_related': ['category_id'],
             'prefetch_related': [],
         },
         'out_of_stock': {
-            'select_related': ['category'],
+            'select_related': ['category_id'],
             'prefetch_related': [],
         },
         'by_category': {
-            'select_related': ['category'],
+            'select_related': ['category_id'],
             'prefetch_related': [],
         }
     }

@@ -4,7 +4,8 @@ import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
-import { Package, Monitor, Lock, MoreVertical, Clock, Check, Trash2 } from 'lucide-react';
+import { Package, Monitor, Lock, MoreVertical, Clock, Check, Trash2, Loader } from 'lucide-react';
+import apiClient from '../services/api';
 
 interface Notification {
   id: string;
@@ -15,38 +16,36 @@ interface Notification {
   read: boolean;
 }
 
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'critical',
-    title: 'Low Stock Alert: Wheat Flour',
-    description: 'Stock level is below 5kg. Please update inventory.',
-    time: 'Just Now',
-    read: false,
-  },
-  {
-    id: '2',
-    type: 'system-open',
-    title: 'Cash Counter Opened',
-    description: 'Main Register opened by Kasun (Cashier).',
-    time: '08:00 AM',
-    read: true,
-  },
-  {
-    id: '3',
-    type: 'system-close',
-    title: 'Cash Counter Closed',
-    description: 'Shift ended. Final cash count recorded.',
-    time: 'Yesterday, 09:30 PM',
-    read: true,
-  },
-];
-
 export function NotificationScreen() {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('all');
   const [showSimulatedDropdown, setShowSimulatedDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // --- Fetch Notifications from API ---
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        setIsLoading(true);
+        setFetchError(null);
+        const items = await apiClient.notifications.getAll();
+        // items is already a flat array of UI-formatted notifications
+        setNotifications(items);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to fetch notifications';
+        setFetchError(errorMsg);
+        console.error('Error fetching notifications:', error);
+        // Fall back to empty array on error
+        setNotifications([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -167,7 +166,23 @@ export function NotificationScreen() {
         <TabsContent value={activeTab}>
           {/* Notification List */}
           <div className="space-y-3">
-            {filteredNotifications.length === 0 ? (
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="flex justify-center mb-4">
+                  <Loader className="w-8 h-8 text-orange-600 animate-spin" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Loading notifications</h3>
+                <p className="text-gray-600">Please wait...</p>
+              </div>
+            ) : fetchError ? (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Package className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Error loading notifications</h3>
+                <p className="text-gray-600">{fetchError}</p>
+              </div>
+            ) : filteredNotifications.length === 0 ? (
               <div className="text-center py-12">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Package className="w-8 h-8 text-gray-400" />
