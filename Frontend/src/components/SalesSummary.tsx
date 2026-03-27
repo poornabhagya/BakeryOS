@@ -23,15 +23,6 @@ type Sale = {
   created_at: string;
 };
 
-const mockSales: Sale[] = [
-  { id: 1, bill_number: 'BILL-1001', cashier_id: 1, cashier_name: 'Cashier1', subtotal: 7200, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 7000, payment_method: 'Cash', item_count: 3, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
-  { id: 2, bill_number: 'BILL-1002', cashier_id: 1, cashier_name: 'Cashier1', subtotal: 5100, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 5000, payment_method: 'Card', item_count: 3, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
-  { id: 3, bill_number: 'BILL-1003', cashier_id: 2, cashier_name: 'Cashier2', subtotal: 4100, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 4000, payment_method: 'Cash', item_count: 3, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
-  { id: 4, bill_number: 'BILL-1004', cashier_id: 1, cashier_name: 'Cashier1', subtotal: 3100, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 3000, payment_method: 'Cash', item_count: 4, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
-  { id: 5, bill_number: 'BILL-1005', cashier_id: 2, cashier_name: 'Cashier2', subtotal: 2500, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 2400, payment_method: 'Card', item_count: 3, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
-  { id: 6, bill_number: 'BILL-1006', cashier_id: 1, cashier_name: 'Cashier1', subtotal: 4100, discount_id: null, discount_name: null, discount_amount: 0, total_amount: 4000, payment_method: 'Cash', item_count: 2, date_time: new Date().toISOString(), created_at: new Date().toISOString() },
-];
-
 export function SalesSummary() {
   // --- State: API Data ---
   const [sales, setSales] = useState<Sale[]>([]);
@@ -45,15 +36,14 @@ export function SalesSummary() {
         setIsLoading(true);
         setFetchError(null);
         const response = await apiClient.sales.getAll();
-        // Convert API sales to UI format
-        const uiSales = response.results.map(convertApiSaleToUi);
-        setSales(uiSales);
+        // response.items already contains UI-formatted sales - empty array if no sales
+        setSales(response.items || []);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Failed to fetch sales';
         setFetchError(errorMsg);
         console.error('Error fetching sales:', error);
-        // Fall back to mock data on error
-        setSales(mockSales);
+        // On error, set to empty array - don't use mock data
+        setSales([]);
       } finally {
         setIsLoading(false);
       }
@@ -70,7 +60,8 @@ export function SalesSummary() {
   const [amountFilter, setAmountFilter] = useState<string>('All');
 
   const filtered = useMemo(() => {
-    return mockSales.filter(s => {
+    // Filter from REAL sales data, not mock
+    return sales.filter(s => {
       const saleDate = new Date(s.date_time).toISOString().slice(0, 10);
       if (saleDate < dateFrom || saleDate > dateTo) return false;
       if (searchId.trim() && !s.bill_number.toLowerCase().includes(searchId.trim().toLowerCase())) return false;
@@ -78,7 +69,7 @@ export function SalesSummary() {
       if (amountFilter === 'High' && toNumber(s.total_amount) <= 1000) return false;
       return true;
     });
-  }, [dateFrom, dateTo, searchId, amountFilter]);
+  }, [sales, dateFrom, dateTo, searchId, amountFilter]);
 
   const applyTimePeriod = (period: string) => {
     const now = new Date();
@@ -159,6 +150,14 @@ export function SalesSummary() {
 
   return (
     <div className="p-6">
+      {/* Error Message */}
+      {fetchError && (
+        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700">
+          <p className="font-semibold">Error loading sales data</p>
+          <p className="text-sm">{fetchError}</p>
+        </div>
+      )}
+      
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="p-4 rounded-xl shadow-sm flex items-center gap-4 border border-green-200" style={{ backgroundColor: '#ecfdf5' }}>
@@ -253,22 +252,37 @@ export function SalesSummary() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(s => (
-                <tr key={s.id} className="border-b border-green-100 hover:bg-[#F0FFF4] transition-colors">
-                  <td className="py-3 px-4 font-medium text-green-900">{s.bill_number}</td>
-                  <td className="py-3 px-4 text-green-700">{formatDateTime(s.date_time)}</td>
-                  <td className="py-3 px-4 text-gray-700">{s.item_count} items</td>
-                  <td className="py-3 px-4 font-bold text-emerald-700">Rs. {s.total_amount.toLocaleString()}</td>
-                  <td className="py-3 px-4 flex gap-2">
-                    <button title="View" className="px-3 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                      <Eye className="w-4 h-4" /> View
-                    </button>
-                    <button title="Reprint" className="px-3 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                      <Printer className="w-4 h-4" /> Reprint
-                    </button>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-gray-500">
+                    <Loader className="w-5 h-5 animate-spin mx-auto mb-2" />
+                    Loading sales data...
                   </td>
                 </tr>
-              ))}
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-gray-500">
+                    No sales found. Database is empty.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map(s => (
+                  <tr key={s.id} className="border-b border-green-100 hover:bg-[#F0FFF4] transition-colors">
+                    <td className="py-3 px-4 font-medium text-green-900">{s.bill_number}</td>
+                    <td className="py-3 px-4 text-green-700">{formatDateTime(s.date_time)}</td>
+                    <td className="py-3 px-4 text-gray-700">{s.item_count} items</td>
+                    <td className="py-3 px-4 font-bold text-emerald-700">Rs. {s.total_amount.toLocaleString()}</td>
+                    <td className="py-3 px-4 flex gap-2">
+                      <button title="View" className="px-3 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                        <Eye className="w-4 h-4" /> View
+                      </button>
+                      <button title="Reprint" className="px-3 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                        <Printer className="w-4 h-4" /> Reprint
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

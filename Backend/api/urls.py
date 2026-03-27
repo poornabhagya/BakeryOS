@@ -1,8 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from api.views import LoginView, LogoutView, MeView
-from api.views import UserViewSet, CategoryViewSet, IngredientViewSet, BatchViewSet, ProductViewSet, ProductBatchViewSet, RecipeViewSet, DiscountViewSet, SaleViewSet, WastageReasonViewSet, ProductWastageViewSet, IngredientWastageViewSet, ProductStockHistoryViewSet, IngredientStockHistoryViewSet, NotificationViewSet
-from api.views.analytics_views import SalesAnalyticsViewSet, InventoryAnalyticsViewSet, DashboardKpiViewSet
+from api.views import UserViewSet, CategoryViewSet, IngredientViewSet, BatchViewSet, ProductViewSet, ProductBatchViewSet, RecipeViewSet, DiscountViewSet, SaleViewSet, WastageReasonViewSet, ProductWastageViewSet, IngredientWastageViewSet, WastageViewSet, ProductStockHistoryViewSet, IngredientStockHistoryViewSet, NotificationViewSet
+from api.views.analytics_views import SalesAnalyticsViewSet, InventoryAnalyticsViewSet, DashboardKpiViewSet, SalesStatsViewSet, ProductStatsViewSet, WastageStatsViewSet, InventoryStatsViewSet, LowStockViewSet
 
 # Create router for viewsets
 router = DefaultRouter()
@@ -16,6 +16,7 @@ router.register(r'recipes', RecipeViewSet, basename='recipe')
 router.register(r'discounts', DiscountViewSet, basename='discount')
 router.register(r'sales', SaleViewSet, basename='sale')
 router.register(r'wastage-reasons', WastageReasonViewSet, basename='wastage-reason')
+router.register(r'wastage', WastageViewSet, basename='wastage')
 router.register(r'product-wastages', ProductWastageViewSet, basename='product-wastage')
 router.register(r'ingredient-wastages', IngredientWastageViewSet, basename='ingredient-wastage')
 router.register(r'product-stock-history', ProductStockHistoryViewSet, basename='product-stock-history')
@@ -23,6 +24,11 @@ router.register(r'ingredient-stock-history', IngredientStockHistoryViewSet, base
 router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'analytics/sales', SalesAnalyticsViewSet, basename='sales-analytics')
 router.register(r'analytics/inventory', InventoryAnalyticsViewSet, basename='inventory-analytics')
+router.register(r'analytics/sales-stats', SalesStatsViewSet, basename='sales-stats')
+router.register(r'analytics/product-stats', ProductStatsViewSet, basename='product-stats')
+router.register(r'analytics/wastage-stats', WastageStatsViewSet, basename='wastage-stats')
+router.register(r'analytics/inventory-stats', InventoryStatsViewSet, basename='inventory-stats')
+router.register(r'inventory/low-stock', LowStockViewSet, basename='low-stock')
 router.register(r'dashboard', DashboardKpiViewSet, basename='dashboard-kpi')
 
 app_name = 'api'

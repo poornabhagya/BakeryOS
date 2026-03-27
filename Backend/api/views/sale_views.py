@@ -43,12 +43,12 @@ class SaleViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     # Query optimization profiles
     optimized_relations = {
         'list': {
-            'select_related': ['cashier', 'discount'],
-            'prefetch_related': Prefetch('items', queryset=SaleItem.objects.select_related('product')),
+            'select_related': ['cashier_id', 'discount_id'],
+            'prefetch_related': Prefetch('items', queryset=SaleItem.objects.select_related('product_id')),
         },
         'retrieve': {
-            'select_related': ['cashier', 'discount'],
-            'prefetch_related': Prefetch('items', queryset=SaleItem.objects.select_related('product')),
+            'select_related': ['cashier_id', 'discount_id'],
+            'prefetch_related': Prefetch('items', queryset=SaleItem.objects.select_related('product_id')),
         }
     }
     
@@ -112,8 +112,8 @@ class SaleViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
             queryset = queryset.filter(cashier_id=cashier_id)
         
         # Apply optimized query patterns
-        return queryset.select_related('cashier', 'discount').prefetch_related(
-            Prefetch('items', queryset=SaleItem.objects.select_related('product'))
+        return queryset.select_related('cashier_id', 'discount_id').prefetch_related(
+            Prefetch('items', queryset=SaleItem.objects.select_related('product_id'))
         )
     
     def create(self, request, *args, **kwargs):

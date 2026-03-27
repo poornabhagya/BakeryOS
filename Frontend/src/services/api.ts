@@ -9,7 +9,11 @@ import {
 // API Configuration
 // ============================================================
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+// Use relative path /api so Vite proxy can intercept requests in development
+// In production, this will be handled by the backend serving the frontend
+const API_BASE = '/api';
+console.log('[API] API_BASE configured as:', API_BASE);
+console.log('[API] Using relative URL - Vite proxy will handle in development');
 
 // ============================================================
 // Token Management
@@ -44,7 +48,7 @@ function getAuthHeaders(): Record<string, string> {
   const token = getAccessToken();
   return {
     'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
+    ...(token && { Authorization: `Token ${token}` }),
   };
 }
 
@@ -107,6 +111,12 @@ async function makeRequest<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   const token = getAccessToken();
+  const method = options.method || 'GET';
+  
+  console.log(`[API] ${method} ${url}`);
+  if (token) {
+    console.log('[API] Authorization header: Token ' + token.substring(0, 20) + '...');
+  }
   
   let response: Response;
 
@@ -115,10 +125,11 @@ async function makeRequest<T>(
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
+        ...(token && { Authorization: `Token ${token}` }),
         ...options.headers,
       },
     });
+    console.log(`[API] Response status: ${response.status}`);
   } catch (error) {
     // Network error (no response from server)
     const errorMessage = error instanceof Error ? error.message : 'Network request failed';
@@ -126,30 +137,12 @@ async function makeRequest<T>(
     throw new ApiError(0, { error: errorMessage }, `Network error: ${errorMessage}`);
   }
 
-  // Handle 401 - Token expired, try refreshing
-  if (response.status === 401 && refreshToken) {
-    try {
-      console.warn(`[API] Token expired on ${endpoint}, attempting refresh...`);
-      await refreshAccessToken();
-      const newToken = getAccessToken();
-      
-      try {
-        response = await fetch(url, {
-          ...options,
-          headers: {
-            'Content-Type': 'application/json',
-            ...(newToken && { Authorization: `Bearer ${newToken}` }),
-            ...options.headers,
-          },
-        });
-      } catch (retryError) {
-        throw new ApiError(0, { error: retryError }, 'Network error after token refresh');
-      }
-    } catch (refreshError) {
-      clearTokens();
-      window.location.href = '/login';
-      throw new ApiError(401, { error: refreshError }, 'Session expired. Please login again.');
-    }
+  // Handle 401 - Token invalid or expired (no refresh in Token auth)
+  if (response.status === 401) {
+    console.warn(`[API] Unauthorized on ${endpoint} (401) - token invalid or expired`);
+    clearTokens();
+    window.location.href = '/login';
+    throw new ApiError(401, {}, 'Session expired. Please log in again.');
   }
 
   // Handle other error statuses
@@ -226,7 +219,11 @@ async function makeRequest<T>(
     );
   }
 
-  return response.json() as Promise<T>;
+  // Success path - parse JSON
+  console.log(`[API] ✅ Response successful (${response.status}), parsing JSON...`);
+  const data = await response.json() as T;
+  console.log(`[API] ✅ JSON parsed successfully for ${endpoint}`);
+  return data;
 }
 
 // ============================================================
@@ -246,20 +243,51 @@ interface PaginatedResponse<T> {
 
 export const authApi = {
   login: async (username: string, password: string) => {
-    const response = await makeRequest<{
-      access: string;
-      refresh: string;
-      user: ApiUser;
-    }>('/auth/login/', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
+    console.log('[API] Attempting login with username:', username);
+    console.log('[API] Using API_BASE:', API_BASE);
+    
+    try {
+      const response = await makeRequest<{
+        token?: string;      // Some endpoints return 'token'
+        access?: string;     // Others return 'access' 
+        refresh?: string;    // And 'refresh'
+        user: ApiUser;
+      }>('/auth/login/', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
 
-    setTokens(response.access, response.refresh);
-    return {
-      token: response.access,
-      user: convertApiUserToUi(response.user),
-    };
+      console.log('[API] ==================== LOGIN RESPONSE ====================');
+      console.log('[API] Response object:', response);
+      console.log('[API] Response keys:', Object.keys(response));
+      console.log('[API] response.token:', response.token ? response.token.substring(0, 30) + '...' : 'undefined');
+      console.log('[API] response.access:', response.access ? response.access.substring(0, 30) + '...' : 'undefined');
+      console.log('[API] response.refresh:', response.refresh ? response.refresh.substring(0, 30) + '...' : 'undefined');
+      console.log('[API] response.user:', response.user);
+      console.log('[API] ============================================================');
+
+      // Determine which token field is being used
+      const accessToken = response.access || response.token;
+      const refreshToken = response.refresh;
+
+      if (!accessToken) {
+        throw new Error('Login response missing access token (neither "access" nor "token" field found)');
+      }
+
+      setTokens(accessToken, refreshToken || '');
+      console.log('[API] ✅ Tokens stored in localStorage');
+      console.log('[API] Stored access_token:', localStorage.getItem('access_token') ? localStorage.getItem('access_token')!.substring(0, 30) + '...' : 'NOT FOUND');
+      console.log('[API] Stored refresh_token:', localStorage.getItem('refresh_token') ? localStorage.getItem('refresh_token')!.substring(0, 30) + '...' : 'NOT FOUND');
+      
+      return {
+        token: accessToken,
+        user: convertApiUserToUi(response.user),
+      };
+    } catch (err) {
+      console.error('[API] ❌ LOGIN FAILED:', err);
+      console.error('[API] Error type:', err instanceof Error ? err.message : err);
+      throw err;
+    }
   },
 
   logout: () => {
@@ -278,15 +306,19 @@ export const productApi = {
     let endpoint = `/products/?page=${page}`;
     if (search) endpoint += `&search=${encodeURIComponent(search)}`;
 
-    const response = await makeRequest<PaginatedResponse<ApiProduct>>(
+    const response = await makeRequest<PaginatedResponse<ApiProduct> | ApiProduct[]>(
       endpoint
     );
 
+    // Handle both flat array and paginated response
+    const items = Array.isArray(response) ? response : response.results;
+    const total = Array.isArray(response) ? response.length : response.count;
+
     return {
-      items: response.results.map(convertApiProductToUi),
-      total: response.count,
-      nextPage: response.next,
-      previousPage: response.previous,
+      items: items.map(convertApiProductToUi),
+      total: total,
+      nextPage: Array.isArray(response) ? null : response.next,
+      previousPage: Array.isArray(response) ? null : response.previous,
     };
   },
 
@@ -565,8 +597,9 @@ export const wastageApi = {
 
 export const notificationApi = {
   getAll: async () => {
-    const response = await makeRequest<any[]>('/notifications/');
-    return response;
+    const response = await makeRequest<PaginatedResponse<any>>('/notifications/');
+    // Extract results array from paginated response
+    return Array.isArray(response) ? response : (response.results || []);
   },
 
   markAsRead: async (id: number) => {

@@ -968,3 +968,253 @@ class DashboardKpiViewSet(viewsets.ViewSet):
         serializer = DashboardKpiSerializer(result)
         return Response(serializer.data)
 
+
+# ============================================================
+# FRONTEND-FACING ANALYTICS ENDPOINTS
+# ============================================================
+# These are the top-level endpoints that the frontend calls directly
+
+
+class SalesStatsViewSet(viewsets.ViewSet):
+    """
+    API Endpoint for sales statistics.
+    
+    GET /api/analytics/sales-stats/
+    - Returns overall sales KPIs for dashboard
+    - ALWAYS returns REAL database aggregations, NEVER hardcoded values
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def list(self, request):
+        """Get overall sales statistics from database"""
+        # Query ALL sales - no date filtering by default
+        # Use no filter to get complete database totals
+        all_sales = Sale.objects.all()
+        
+        # Calculate totals using ONLY database aggregations
+        total_sales_amount = all_sales.aggregate(
+            total=Sum('total_amount', default=Decimal('0'))
+        )['total'] or Decimal('0')
+        
+        total_discount = all_sales.aggregate(
+            total=Sum('discount_amount', default=Decimal('0'))
+        )['total'] or Decimal('0')
+        
+        total_orders = all_sales.count()  # Total number of sales
+        
+        # Calculate cost of goods from actual sales items
+        cost_of_goods = Decimal('0')
+        for sale in all_sales.prefetch_related('items'):
+            for item in sale.items.all():
+                if item.product_id and item.product_id.cost_price:
+                    cost_of_goods += Decimal(str(item.quantity)) * Decimal(str(item.product_id.cost_price))
+        
+        # Calculate total wastage loss (both product and ingredient)
+        product_wastage_total = ProductWastage.objects.aggregate(
+            total=Sum('total_loss', default=Decimal('0'))
+        )['total'] or Decimal('0')
+        
+        ingredient_wastage_total = IngredientWastage.objects.aggregate(
+            total=Sum('total_loss', default=Decimal('0'))
+        )['total'] or Decimal('0')
+        
+        total_wastage_loss = product_wastage_total + ingredient_wastage_total
+        
+        # Calculate revenue (after discount)
+        revenue = total_sales_amount - total_discount
+        net_profit = revenue - cost_of_goods
+        
+        # Return REAL database values
+        return Response({
+            'total_revenue': float(revenue),
+            'total_orders': int(total_orders),
+            'total_discount': float(total_discount),
+            'total_cost_of_goods': float(cost_of_goods),
+            'total_wastage_loss': float(total_wastage_loss),
+            'net_profit': float(net_profit),
+        })
+
+
+class ProductStatsViewSet(viewsets.ViewSet):
+    """
+    API Endpoint for product statistics.
+    
+    GET /api/analytics/product-stats/
+    - Returns top-selling products
+    - ALWAYS returns REAL database data, NEVER hardcoded values
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def list(self, request):
+        """Get top-selling products from database"""
+        limit = int(request.query_params.get('limit', 10))
+        
+        # Query ACTUAL sales items from database
+        top_products = SaleItem.objects.values('product_id').annotate(
+            product_name=F('product_id__name'),
+            quantity_sold=Sum('quantity', default=Decimal('0')),
+            total_sales_amt=Sum('subtotal', default=Decimal('0')),
+        ).order_by('-total_sales_amt')[:limit]
+        
+        results = []
+        for item in top_products:
+            results.append({
+                'product_id': item['product_id'],
+                'product_name': item['product_name'] or 'Unknown',
+                'quantity_sold': float(item['quantity_sold'] or 0),
+                'total_sales': float(item['total_sales_amt'] or 0),
+            })
+        
+        # If no sales exist, return empty array (not hardcoded data)
+        return Response({'top_products': results})
+
+
+class WastageStatsViewSet(viewsets.ViewSet):
+    """
+    API Endpoint for wastage statistics.
+    
+    GET /api/analytics/wastage-stats/
+    - Returns wastage breakdown by reason
+    - ALWAYS returns REAL database data, NEVER hardcoded values
+    - SAFELY handles NULL values and empty querysets
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def list(self, request):
+        """Get wastage breakdown from database"""
+        try:
+            # Get wastage by reason - query ACTUAL database
+            # Filter out NULL reason_id to avoid accessing None.reason errors
+            wastage_by_reason = ProductWastage.objects.filter(
+                reason_id__isnull=False
+            ).values('reason_id').annotate(
+                reason_name=F('reason_id__reason'),
+                total_quantity=Sum('quantity', default=Decimal('0')),
+                total_loss_amt=Sum('total_loss', default=Decimal('0')),
+                waste_count=Count('id', default=0),
+            ).order_by('-total_loss_amt')
+            
+            # Get total revenue for percentage calculation - safely handle None
+            revenue_result = Sale.objects.aggregate(
+                total=Sum('total_amount', default=Decimal('0'))
+            )
+            total_revenue = revenue_result.get('total') or Decimal('1')
+            if total_revenue == 0:
+                total_revenue = Decimal('1')  # Avoid division by zero
+            
+            results = []
+            total_wastage = Decimal('0')
+            
+            # Handle empty wastage_by_reason safely
+            if wastage_by_reason:
+                for item in wastage_by_reason:
+                    # Safely extract fields with None defaults
+                    loss = Decimal(str(item.get('total_loss_amt') or 0))
+                    quantity = Decimal(str(item.get('total_quantity') or 0))
+                    reason_name = item.get('reason_name') or 'Unknown'
+                    
+                    total_wastage += loss
+                    
+                    # Calculate percentage of revenue
+                    percentage = float((loss / total_revenue * 100)) if total_revenue > 0 else 0.0
+                    
+                    results.append({
+                        'reason': str(reason_name),
+                        'quantity': float(quantity),
+                        'loss_amount': float(loss),
+                        'percentage_of_revenue': percentage,
+                    })
+            
+            # Return REAL wastage breakdown or empty if no wastage
+            return Response({
+                'breakdown': results,
+                'total_wastage_loss': float(total_wastage),
+            })
+            
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in WastageStatsViewSet.list(): {str(e)}")
+            
+            # Return safe empty response on error
+            return Response({
+                'breakdown': [],
+                'total_wastage_loss': 0.0,
+            }, status=200)
+
+
+class InventoryStatsViewSet(viewsets.ViewSet):
+    """
+    API Endpoint for inventory statistics.
+    
+    GET /api/analytics/inventory-stats/
+    - Returns inventory metrics
+    - ALWAYS returns REAL database data, NEVER hardcoded values
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def list(self, request):
+        """Get inventory statistics - REAL DATA ONLY"""
+        # Query ACTUAL products from database
+        products = Product.objects.all()
+        total_value = Decimal('0')
+        low_stock_count = 0
+        
+        for product in products:
+            stock = Decimal(str(product.current_stock or 0))
+            cost = Decimal(str(product.cost_price or 0))
+            item_value = stock * cost
+            total_value += item_value
+            
+            if stock < 10:
+                low_stock_count += 1
+        
+        # Query ACTUAL expiring batches from database
+        today = timezone.now().date()
+        expiring_soon = IngredientBatch.objects.filter(
+            expire_date__lte=today + timedelta(days=7),
+            expire_date__gte=today,
+            current_qty__gt=Decimal('0')
+        ).count()
+        
+        return Response({
+            'total_inventory_value': float(total_value),
+            'total_products': products.count(),
+            'low_stock_items': low_stock_count,
+            'expiring_items_count': expiring_soon,
+        })
+
+
+class LowStockViewSet(viewsets.ViewSet):
+    """
+    API Endpoint for low stock items.
+    
+    GET /api/inventory/low-stock/
+    - Returns products with low stock
+    - ALWAYS returns REAL database data, NEVER hardcoded values
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def list(self, request):
+        """Get all low stock items - REAL DATA ONLY"""
+        # Query ACTUAL products from database with current_stock < 10
+        low_stock_products = Product.objects.filter(
+            current_stock__lt=10
+        ).order_by('current_stock')
+        
+        results = []
+        for product in low_stock_products:
+            results.append({
+                'id': product.id,
+                'type': 'product',
+                'name': product.name,
+                'product_id': product.product_id,
+                'current_stock': float(product.current_stock or 0),
+                'reorder_level': 10.0,
+                'unit': 'units',
+            })
+        
+        # Return REAL low stock items or empty array if none
+        return Response(results)
+

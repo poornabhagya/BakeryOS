@@ -84,18 +84,15 @@ const StockManagementScreen: React.FC = () => {
         setIsFetching(true);
         setFetchError(null);
         const response = await apiClient.products.getAll();
-        // Convert API products to UI format and map to Product interface
-        const uiProducts = response.results.map((apiProduct: any) => {
-          const uiProduct = convertApiProductToUi(apiProduct);
-          return {
-            id: uiProduct.id,
-            name: uiProduct.name,
-            category_name: uiProduct.category_name,
-            selling_price: uiProduct.selling_price,
-            cost_price: uiProduct.cost_price,
-            current_stock: uiProduct.current_stock,
-          };
-        });
+        // response.items already contains UI-formatted products
+        const uiProducts = response.items.map((uiProduct: any) => ({
+          id: uiProduct.id,
+          name: uiProduct.name,
+          category_name: uiProduct.category_name,
+          selling_price: uiProduct.selling_price,
+          cost_price: uiProduct.cost_price,
+          current_stock: uiProduct.current_stock,
+        }));
         setProducts(uiProducts);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Failed to fetch products';

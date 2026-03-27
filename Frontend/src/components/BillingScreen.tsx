@@ -115,9 +115,8 @@ export function BillingScreen() {
           setIsLoading(true);
           setFetchError(null);
           const response = await apiClient.products.getAll();
-          // Convert API products to UI format
-          const uiProducts = response.results.map(convertApiProductToUi);
-          setProducts(uiProducts);
+          // response.items already contains UI-formatted products
+          setProducts(response.items);
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Failed to fetch products';
           setFetchError(errorMsg);
