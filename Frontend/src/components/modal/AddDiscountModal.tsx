@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Loader } from 'lucide-react';
 
 interface AddDiscountModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (discountData: any) => void;
+  onSave: (discountData: any) => Promise<void>;
   categories: string[];
   items: { id: string; name: string }[];
 }
@@ -39,6 +39,7 @@ export const AddDiscountModal: React.FC<AddDiscountModalProps> = ({ open, onClos
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [touched, setTouched] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const valueInvalid = value === '' || Number(value) <= 0;
   const nameInvalid = !name.trim();
@@ -46,23 +47,38 @@ export const AddDiscountModal: React.FC<AddDiscountModalProps> = ({ open, onClos
 
   if (!open) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setTouched(true);
     if (!canSave) return;
-    onSave({
-      id: discountId,
-      name: name.trim(),
-      type,
-      value: Number(value),
-      applicableTo,
-      category: applicableTo === 'category' ? category : undefined,
-      item: applicableTo === 'item' ? item : undefined,
-      startDate,
-      endDate: endDate || undefined,
-      startTime: startTime || undefined,
-      endTime: endTime || undefined,
-    });
-    onClose();
+    
+    try {
+      setIsSaving(true);
+      await onSave({
+        id: discountId,
+        name: name.trim(),
+        type,
+        value: Number(value),
+        applicableTo,
+        category: applicableTo === 'category' ? category : undefined,
+        item: applicableTo === 'item' ? item : undefined,
+        startDate,
+        endDate: endDate || undefined,
+        startTime: startTime || undefined,
+        endTime: endTime || undefined,
+      });
+      // Reset form on successful save
+      setName('');
+      setValue('');
+      setCategory('');
+      setItem('');
+      setStartDate('');
+      setEndDate('');
+      setStartTime('');
+      setEndTime('');
+      setTouched(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const modalContent = (
@@ -234,10 +250,17 @@ export const AddDiscountModal: React.FC<AddDiscountModalProps> = ({ open, onClos
           <button
             type="button"
             onClick={handleSave}
-            disabled={!canSave}
-            className="px-4 py-2 rounded-lg bg-orange-600 text-white font-bold hover:bg-orange-700 transition-colors disabled:opacity-60"
+            disabled={!canSave || isSaving}
+            className="px-4 py-2 rounded-lg bg-orange-600 text-white font-bold hover:bg-orange-700 transition-colors disabled:opacity-60 flex items-center gap-2"
           >
-            Save Discount
+            {isSaving ? (
+              <>
+                <Loader className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Discount'
+            )}
           </button>
         </div>
       </div>

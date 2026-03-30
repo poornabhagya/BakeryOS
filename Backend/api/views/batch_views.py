@@ -6,7 +6,7 @@ from rest_framework.pagination import PageNumberPagination
 from django.db.models import F, Q
 from django.utils import timezone
 from datetime import timedelta
-from django_filters.rest_framework import DjangoFilterBackend
+# from django_filters.rest_framework import DjangoFilterBackend  # Disabled due to compatibility
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from api.models import IngredientBatch, Ingredient
@@ -68,7 +68,7 @@ class BatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
     
     queryset = IngredientBatch.objects.all()
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filter_backends = [SearchFilter, OrderingFilter]
     pagination_class = BatchPagination
     
     # Query optimization profiles

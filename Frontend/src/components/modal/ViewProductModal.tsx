@@ -2,39 +2,41 @@ import React from 'react';
 import { Clock } from 'lucide-react';
 import { toNumber, subtractNumeric } from '../../utils/numericUtils';
 
-interface Ingredient {
-  name: string;
-  qty: number;
-  unit: string;
+interface RecipeItem {
+  id: number;
+  ingredient_id: number;
+  ingredient_name: string;
+  ingredient_unit: string;
+  quantity_required: number | string;
 }
 
 interface ViewProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   item: {
-    id: string;
+    id: number | string;
+    product_id?: string;
     name: string;
     selling_price?: number;
     cost_price?: number;
-    shelfLife?: string;
+    shelf_life?: number;
+    shelf_unit?: string;
     category_name: string;
+    recipe_items?: RecipeItem[];
   } | null;
-}
-
-function getMockIngredients(itemId: string): Ingredient[] {
-  return [
-    { name: 'Flour', qty: 500, unit: 'g' },
-    { name: 'Sugar', qty: 100, unit: 'g' },
-    { name: 'Butter', qty: 200, unit: 'g' },
-    { name: 'Eggs', qty: 3, unit: 'pcs' },
-  ];
 }
 
 export const ViewProductModal: React.FC<ViewProductModalProps> = ({ isOpen, onClose, item }) => {
   if (!isOpen || !item) return null;
-  const ingredients = getMockIngredients(item.id);
+  
+  // Get recipe items from prop (or empty array if none)
+  const recipeItems = item.recipe_items || [];
+  
   // Safely calculate profit even if prices come as strings from API
   const profit = subtractNumeric(toNumber(item.selling_price), toNumber(item.cost_price));
+  
+  // Format shelf life display
+  const shelfLifeDisplay = item.shelf_life !== undefined && item.shelf_life !== null ? `${item.shelf_life} ${item.shelf_unit || ''}` : '--';
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -71,7 +73,7 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({ isOpen, onCl
           <div className="flex-1 min-w-0 p-5 text-center bg-white/90 flex flex-col justify-center hover:bg-orange-50/60 transition-colors duration-150">
             <div className="text-xs text-gray-500 font-semibold uppercase mb-1 tracking-wide">Shelf Life</div>
             <div className="flex items-center justify-center gap-1 text-base font-medium text-gray-700">
-              <Clock className="w-4 h-4 text-gray-400" />{item.shelfLife ?? '--'}
+              <Clock className="w-4 h-4 text-gray-400" />{shelfLifeDisplay}
             </div>
           </div>
         </div>
@@ -91,13 +93,21 @@ export const ViewProductModal: React.FC<ViewProductModalProps> = ({ isOpen, onCl
                 </tr>
               </thead>
               <tbody>
-                {ingredients.map((ing, idx) => (
-                  <tr key={idx} className="border-b last:border-b-0 bg-white hover:bg-orange-50/80 transition-colors duration-100">
-                    <td className="px-3 py-2 font-medium text-gray-800 text-left">{ing.name}</td>
-                    <td className="px-3 py-2 text-center text-gray-700">{ing.qty}</td>
-                    <td className="px-3 py-2 text-center text-gray-600">{ing.unit}</td>
+                {recipeItems.length > 0 ? (
+                  recipeItems.map((item, idx) => (
+                    <tr key={idx} className="border-b last:border-b-0 bg-white hover:bg-orange-50/80 transition-colors duration-100">
+                      <td className="px-3 py-2 font-medium text-gray-800 text-left">{item.ingredient_name}</td>
+                      <td className="px-3 py-2 text-center text-gray-700">{toNumber(item.quantity_required).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-center text-gray-600">{item.ingredient_unit}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr className="border-b bg-white">
+                    <td colSpan={3} className="px-3 py-4 text-center text-gray-500 text-sm">
+                      No recipe ingredients added
+                    </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

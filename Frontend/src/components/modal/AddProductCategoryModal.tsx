@@ -1,24 +1,56 @@
-import { X, Info } from 'lucide-react';
+import { X, Info, Loader } from 'lucide-react';
 import { useState } from 'react';
-import { createPortal } from 'react-dom'; // 1. IMPORT THIS
+import { createPortal } from 'react-dom';
+import apiClient from '../../services/api';
 
 export interface AddProductCategoryModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (data: { name: string; lowStockThreshold: number }) => void;
+    onCategoryAdded?: () => void;
 }
 
-export function AddProductCategoryModal({ isOpen, onClose, onSave }: AddProductCategoryModalProps) {
+export function AddProductCategoryModal({ isOpen, onClose, onCategoryAdded }: AddProductCategoryModalProps) {
     const [categoryName, setCategoryName] = useState('');
     const [lowStockThreshold, setLowStockThreshold] = useState(10);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({ name: categoryName, lowStockThreshold });
-        setCategoryName('');
-        setLowStockThreshold(10);
+        setError(null);
+        setIsLoading(true);
+
+        try {
+            const payload = {
+                name: categoryName,
+                type: 'Product' as const,
+                low_stock_alert: lowStockThreshold,
+                description: null,
+            };
+
+            const response = await apiClient.categories.create(payload);
+            console.log('[Category Created]', response);
+
+            // Reset form
+            setCategoryName('');
+            setLowStockThreshold(10);
+
+            // Trigger parent callback to refresh categories list
+            if (onCategoryAdded) {
+                onCategoryAdded();
+            }
+
+            // Close modal
+            onClose();
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to create category';
+            setError(errorMessage);
+            console.error('[Category Creation Error]', err);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const newCategoryId = `#CAT-NEW`;
@@ -42,7 +74,12 @@ export function AddProductCategoryModal({ isOpen, onClose, onSave }: AddProductC
 
                 {/* Body */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                    {/* ... (Existing form fields remain exactly the same) ... */}
+                    {/* Error Message */}
+                    {error && (
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-sm text-red-700">{error}</p>
+                        </div>
+                    )}
                     <div>
                         <label className="block text-sm text-gray-700 mb-2">Category ID</label>
                         <input type="text" value={newCategoryId} disabled className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500" />
@@ -55,7 +92,8 @@ export function AddProductCategoryModal({ isOpen, onClose, onSave }: AddProductC
                             value={categoryName}
                             onChange={(e) => setCategoryName(e.target.value)}
                             placeholder="e.g., Buns, Pastries"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                            disabled={isLoading}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             required
                         />
                     </div>
@@ -66,8 +104,9 @@ export function AddProductCategoryModal({ isOpen, onClose, onSave }: AddProductC
                             type="number"
                             value={lowStockThreshold}
                             onChange={(e) => setLowStockThreshold(Number(e.target.value))}
+                            disabled={isLoading}
                             min="0"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                     </div>
 
@@ -79,8 +118,15 @@ export function AddProductCategoryModal({ isOpen, onClose, onSave }: AddProductC
                     </div>
 
                     <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium">Cancel</button>
-                        <button type="submit" className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium">Save Category</button>
+                        <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium disabled:opacity-50">Cancel</button>
+                        <button 
+                            type="submit" 
+                            disabled={isLoading || !categoryName.trim()} 
+                            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {isLoading && <Loader className="w-4 h-4 animate-spin" />}
+                            {isLoading ? 'Saving...' : 'Save Category'}
+                        </button>
                     </div>
                 </form>
             </div>

@@ -23,6 +23,7 @@ interface StaffMember {
   contact: string;
   lastLogin: string;
   avatarColor?: string;
+  isActive: boolean; // New field for soft delete filtering
 }
 
 const initialStaffMembers: StaffMember[] = [
@@ -37,6 +38,7 @@ const initialStaffMembers: StaffMember[] = [
     contact: '077-1234567',
     lastLogin: 'Yesterday, 4 PM',
     avatarColor: 'bg-blue-200',
+    isActive: true,
   },
   {
     id: 2,
@@ -49,6 +51,7 @@ const initialStaffMembers: StaffMember[] = [
     contact: '071-9876543',
     lastLogin: 'Today, 9 AM',
     avatarColor: 'bg-green-200',
+    isActive: true,
   },
   {
     id: 3,
@@ -61,6 +64,7 @@ const initialStaffMembers: StaffMember[] = [
     contact: '075-5555555',
     lastLogin: '2 days ago',
     avatarColor: 'bg-orange-200',
+    isActive: true,
   },
   {
     id: 4,
@@ -73,6 +77,7 @@ const initialStaffMembers: StaffMember[] = [
     contact: '076-1111111',
     lastLogin: 'Today, 10 AM',
     avatarColor: 'bg-purple-200',
+    isActive: true,
   },
 ];
 
@@ -99,29 +104,27 @@ export function UserManagement() {
         setIsLoading(true);
         setFetchError(null);
         const response = await apiClient.users.getAll();
-        // Convert API users to UI format (StaffMember)
-        const uiUsers = response.results.map((apiUser: any) => {
-          const uiUser = convertApiUserToUi(apiUser);
-          return {
-            id: uiUser.id,
-            employeeId: uiUser.employee_id,
-            name: uiUser.name,
-            nic: uiUser.contact, // Map contact to NIC for now
-            role: uiUser.role,
-            roleColor: getRoleColor(uiUser.role),
-            status: (uiUser.status === 'active' ? 'Active' : 'Inactive') as 'Active' | 'Inactive',
-            contact: uiUser.contact,
-            lastLogin: 'N/A', // Backend doesn't track this
-            avatarColor: uiUser.avatarColor,
-          };
-        });
+        // response.items already contains UI-formatted users
+        const uiUsers = response.items.map((uiUser: any) => ({
+          id: uiUser.id,
+          employeeId: uiUser.employee_id,
+          name: uiUser.name,
+          nic: uiUser.nic,
+          role: uiUser.role,
+          roleColor: getRoleColor(uiUser.role),
+          status: (uiUser.status === 'active' ? 'Active' : 'Inactive') as 'Active' | 'Inactive',
+          contact: uiUser.contact,
+          lastLogin: 'N/A', // Backend doesn't track this
+          avatarColor: uiUser.avatarColor,
+          isActive: uiUser.is_active ?? true, // Default to true if not provided
+        }));
         setStaff(uiUsers);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Failed to fetch users';
         setFetchError(errorMsg);
         console.error('Error fetching users:', error);
         // Fall back to initial mock data
-        setStaff(initialStaffMembers);
+        setStaff(initialStaffMembers.map(user => ({ ...user, isActive: true })));
       } finally {
         setIsLoading(false);
       }
@@ -142,14 +145,18 @@ export function UserManagement() {
   };
 
   const filteredStaff = useMemo(() => {
-    return staff.filter(member => {
-      const matchesSearch = searchTerm === '' || 
-        member.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        member.nic.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesRole = roleFilter === 'all' || member.role.toLowerCase() === roleFilter.toLowerCase();
-      const matchesStatus = statusFilter === 'all' || member.status.toLowerCase() === statusFilter.toLowerCase();
-      return matchesSearch && matchesRole && matchesStatus;
-    });
+    return staff
+      // Filter 1: Exclude soft-deleted users (where isActive === false)
+      .filter(member => member.isActive === true)
+      // Filter 2: Apply search and role/status filters
+      .filter(member => {
+        const matchesSearch = searchTerm === '' || 
+          member.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          member.nic.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesRole = roleFilter === 'all' || member.role.toLowerCase() === roleFilter.toLowerCase();
+        const matchesStatus = statusFilter === 'all' || member.status.toLowerCase() === statusFilter.toLowerCase();
+        return matchesSearch && matchesRole && matchesStatus;
+      });
   }, [staff, searchTerm, roleFilter, statusFilter]);
 
   const totalUsers = filteredStaff.length;
@@ -162,28 +169,35 @@ export function UserManagement() {
     setStatusFilter('all');
   };
 
+  // Refetch users from API (called after user creation/update/delete via onSuccess)
+  const refetchUsers = async () => {
+    try {
+      const response = await apiClient.users.getAll();
+      const uiUsers = response.items.map((uiUser: any) => ({
+        id: uiUser.id,
+        employeeId: uiUser.employee_id,
+        name: uiUser.name,
+        nic: uiUser.nic,
+        role: uiUser.role,
+        roleColor: getRoleColor(uiUser.role),
+        status: (uiUser.status === 'active' ? 'Active' : 'Inactive') as 'Active' | 'Inactive',
+        contact: uiUser.contact,
+        lastLogin: 'N/A',
+        avatarColor: uiUser.avatarColor,
+        isActive: uiUser.is_active ?? true, // Default to true if not provided
+      }));
+      setStaff(uiUsers);
+    } catch (error) {
+      console.error('Error refetching users:', error);
+    }
+  };
+
   return (
     <div className="p-8">
       <AddUserModal
         open={addUserOpen}
         onClose={() => setAddUserOpen(false)}
-        onSave={userData => {
-          setStaff(prev => [
-            ...prev,
-            {
-              id: prev.length ? Math.max(...prev.map(u => u.id)) + 1 : 1,
-              employeeId: userData.employeeId,
-              name: userData.fullName,
-              nic: userData.nic || '',
-              role: userData.role,
-              roleColor: userData.role === 'Manager' ? 'purple' : userData.role === 'Cashier' ? 'green' : userData.role === 'Baker' ? 'blue' : 'orange',
-              status: userData.status,
-              contact: userData.contact,
-              lastLogin: 'Never',
-              avatarColor: userData.role === 'Manager' ? 'bg-purple-200' : userData.role === 'Cashier' ? 'bg-green-200' : userData.role === 'Baker' ? 'bg-blue-200' : 'bg-orange-200',
-            },
-          ]);
-        }}
+        onSuccess={refetchUsers}
       />
       {/* Add New User Button */}
       <div className="flex justify-end mb-4">
@@ -289,11 +303,10 @@ export function UserManagement() {
       <DeleteUserModal
         open={deleteUserOpen}
         onClose={() => setDeleteUserOpen(false)}
-        onConfirm={() => {
-          if (userToDelete) {
-            setStaff(prev => prev.filter(u => u.id !== userToDelete.id));
-          }
-          setDeleteUserOpen(false);
+        userId={userToDelete?.id}
+        onConfirm={async (deletedUserId) => {
+          // Remove the user from local state after successful API deletion
+          setStaff(prev => prev.filter(u => u.id !== deletedUserId));
         }}
         userName={userToDelete ? userToDelete.name : ''}
       />
@@ -302,17 +315,18 @@ export function UserManagement() {
         open={editUserOpen}
         onClose={() => setEditUserOpen(false)}
         user={selectedUser ? {
-          id: selectedUser.employeeId,
+          id: selectedUser.id,
           fullName: selectedUser.name,
           nic: selectedUser.nic,
           contact: selectedUser.contact,
-          username: selectedUser.nic, // No username in StaffMember, use NIC for now
+          username: selectedUser.nic,
           role: selectedUser.role as any,
           status: selectedUser.status,
         } : null}
+        onSuccess={refetchUsers}
         onUpdate={updatedUser => {
           setStaff(prev => prev.map(u =>
-            u.employeeId === updatedUser.id
+            u.id === updatedUser.id
               ? {
                   ...u,
                   name: updatedUser.fullName,

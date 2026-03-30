@@ -15,10 +15,11 @@ class NotificationListSerializer(serializers.ModelSerializer):
     """List serializer for notifications with read status"""
     is_read = serializers.SerializerMethodField()
     read_at = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
     
     class Meta:
         model = Notification
-        fields = ['id', 'title', 'message', 'type', 'icon', 'is_read', 'read_at', 'created_at']
+        fields = ['id', 'title', 'message', 'type', 'icon', 'is_read', 'read_at', 'status', 'created_at']
         read_only_fields = fields
     
     def get_is_read(self, obj):
@@ -42,16 +43,28 @@ class NotificationListSerializer(serializers.ModelSerializer):
             except NotificationReceipt.DoesNotExist:
                 return None
         return None
+    
+    def get_status(self, obj):
+        """Get status (unread/read/snoozed) for current user"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            try:
+                receipt = obj.receipts.get(user=request.user)
+                return receipt.status
+            except NotificationReceipt.DoesNotExist:
+                return 'unread'
+        return 'unread'
 
 
 class NotificationDetailSerializer(serializers.ModelSerializer):
     """Detail serializer with read status"""
     is_read = serializers.SerializerMethodField()
     read_at = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
     
     class Meta:
         model = Notification
-        fields = ['id', 'title', 'message', 'type', 'icon', 'is_read', 'read_at', 'created_at']
+        fields = ['id', 'title', 'message', 'type', 'icon', 'is_read', 'read_at', 'status', 'created_at']
         read_only_fields = fields
     
     def get_is_read(self, obj):
@@ -75,6 +88,17 @@ class NotificationDetailSerializer(serializers.ModelSerializer):
             except NotificationReceipt.DoesNotExist:
                 return None
         return None
+    
+    def get_status(self, obj):
+        """Get status (unread/read/snoozed) for current user"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            try:
+                receipt = obj.receipts.get(user=request.user)
+                return receipt.status
+            except NotificationReceipt.DoesNotExist:
+                return 'unread'
+        return 'unread'
 
 
 class NotificationReceiptSerializer(serializers.ModelSerializer):
@@ -84,8 +108,8 @@ class NotificationReceiptSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = NotificationReceipt
-        fields = ['id', 'notification', 'user', 'is_read', 'read_at', 'created_at']
-        read_only_fields = fields
+        fields = ['id', 'notification', 'user', 'is_read', 'read_at', 'status', 'created_at']
+        read_only_fields = ['id', 'notification', 'user', 'created_at']
 
 
 class NotificationCreateSerializer(serializers.ModelSerializer):

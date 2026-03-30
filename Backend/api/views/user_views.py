@@ -9,7 +9,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth import get_user_model
-from django_filters.rest_framework import DjangoFilterBackend
+# django_filters removed due to Django 6.0 compatibility
+# from django_filters.rest_framework import DjangoFilterBackend
 
 from api.permissions import IsManager, IsManagerOrSelf
 from api.serializers.user_serializers import (
@@ -55,7 +56,7 @@ class UserViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
     
     queryset = User.objects.all()
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     pagination_class = UserPagination
     
     # Query optimization profiles

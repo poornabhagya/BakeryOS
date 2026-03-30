@@ -267,7 +267,7 @@ OPTIMIZED_PROFILES = {
         'prefetch_related': ['batches', 'stock_history']
     },
     'sale': {
-        'select_related': ['cashier', 'discount'],
+        'select_related': ['cashier_id', 'discount_id'],
         'prefetch_related': ['items', 'items__product']
     },
     'product_batch': {

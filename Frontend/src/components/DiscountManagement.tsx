@@ -3,16 +3,19 @@ import { Card } from './ui/card';
 import { Tag, Zap, Edit, Trash2, Plus, Search, ToggleLeft, Loader } from 'lucide-react';
 import { AddDiscountModal } from './modal/AddDiscountModal';
 import { EditDiscountModal } from './modal/EditDiscountModal';
+import { DeleteConfirmationModal } from './modal/DeleteConfirmationModal';
 import { useAuth } from '../context/AuthContext'; // 1. Auth Import
 import apiClient from '../services/api';
 
 type Discount = {
-  id: string;
+  id: string | number;
   name: string;
   kind: 'percent' | 'fixed';
   value: string; 
   applicableTo: string;
   validity: string;
+  startDate: string | null;  // Raw date from API (YYYY-MM-DD format)
+  endDate: string | null;    // Raw date from API (YYYY-MM-DD format)
   active: boolean;
 };
 
@@ -32,6 +35,30 @@ export default function DiscountManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // --- Helper: Format dates for display ---
+  const formatValidityPeriod = (startDate: string | null, endDate: string | null): string => {
+    if (!startDate && !endDate) return 'Always';
+    
+    const formatDate = (dateStr: string | null): string => {
+      if (!dateStr) return '';
+      try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return '';
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      } catch {
+        return '';
+      }
+    };
+    
+    const formattedStart = formatDate(startDate);
+    const formattedEnd = formatDate(endDate);
+    
+    if (formattedStart && formattedEnd) return `${formattedStart} to ${formattedEnd}`;
+    if (formattedStart) return `From ${formattedStart}`;
+    if (formattedEnd) return `Until ${formattedEnd}`;
+    return 'Always';
+  };
+
   // --- Fetch Discounts from API ---
   useEffect(() => {
     const fetchDiscounts = async () => {
@@ -39,16 +66,27 @@ export default function DiscountManagement() {
         setIsLoading(true);
         setFetchError(null);
         const response = await apiClient.discounts.getAll();
-        // Convert API discounts to UI format
-        const uiDiscounts = response.results.map((apiDiscount: any) => ({
-          id: apiDiscount.id,
-          name: apiDiscount.name,
-          kind: apiDiscount.kind,
-          value: apiDiscount.value,
-          applicableTo: apiDiscount.applicable_to || 'All Items',
-          validity: apiDiscount.validity || 'Always',
-          active: apiDiscount.status === 'active',
-        }));
+        // Map from API response to UI format
+        const uiDiscounts = response.items.map((apiDiscount: any) => {
+          // Extract dates from API response (snake_case keys from Django serializer)
+          const startDate = apiDiscount.start_date || null;
+          const endDate = apiDiscount.end_date || null;
+          
+          // Format validity display string using helper
+          const validity = formatValidityPeriod(startDate, endDate);
+          
+          return {
+            id: apiDiscount.id,
+            name: apiDiscount.name,
+            kind: apiDiscount.discount_type === 'Percentage' ? 'percent' : 'fixed',
+            value: apiDiscount.discount_type === 'Percentage' ? `${apiDiscount.value}%` : `Rs. ${apiDiscount.value}`,
+            applicableTo: apiDiscount.applicable_to === 'All' ? 'All Items' : (apiDiscount.applicable_to || 'All Items'),
+            validity: validity,
+            startDate: startDate,
+            endDate: endDate,
+            active: apiDiscount.is_active === true,
+          };
+        });
         setDiscounts(uiDiscounts);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Failed to fetch discounts';
@@ -68,6 +106,36 @@ export default function DiscountManagement() {
   const [addDiscountOpen, setAddDiscountOpen] = useState(false);
   const [editDiscountOpen, setEditDiscountOpen] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState<any | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [discountToDelete, setDiscountToDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [totalDiscountToday, setTotalDiscountToday] = useState(0);
+  
+  // Fetch today's total discount from analytics endpoint
+  useEffect(() => {
+    const fetchTodayDiscountTotal = async () => {
+      try {
+        // Get today's date range
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+        
+        console.log(`[DiscountManagement] Fetching discount total for ${dateStr}`);
+        
+        // Call analytics API with today's date range
+        const response = await apiClient.analytics.getSalesStats(dateStr, dateStr);
+        
+        if (response && response.total_discount !== undefined) {
+          setTotalDiscountToday(response.total_discount);
+          console.log(`[DiscountManagement] Today's discount total: Rs. ${response.total_discount}`);
+        }
+      } catch (error) {
+        console.error('[DiscountManagement] Error fetching discount total:', error);
+        // Keep default value of 0 on error
+      }
+    };
+
+    fetchTodayDiscountTotal();
+  }, []);
   
   // Mock categories and items
   const categories = ['Buns', 'Cakes', 'Drinks'];
@@ -86,56 +154,243 @@ export default function DiscountManagement() {
 
   const filtered = useMemo(() => {
     return discounts.filter(d => {
+      // Search filter
       if (search.trim() && !d.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
+      
+      // Status filter
       if (statusFilter === 'Active' && !d.active) return false;
       if (statusFilter === 'Inactive' && d.active) return false;
+      
+      // Date range filter for Validity Period
+      if (validFrom || validTo) {
+        // If discount has no start/end dates, it's "Always" valid -> show in all filters
+        if (!d.startDate && !d.endDate) {
+          return true;
+        }
+        
+        // Parse filter dates
+        const filterStart = validFrom ? new Date(validFrom) : null;
+        const filterEnd = validTo ? new Date(validTo) : null;
+        
+        // If no filter dates selected, include discount
+        if (!filterStart && !filterEnd) return true;
+        
+        // Parse discount dates
+        const discountStart = d.startDate ? new Date(d.startDate) : null;
+        const discountEnd = d.endDate ? new Date(d.endDate) : null;
+        
+        // Check if discount period overlaps with filter period
+        // Discount overlaps with filter if:
+        // (discountStart <= filterEnd) AND (discountEnd >= filterStart)
+        
+        if (filterStart && discountEnd && discountEnd < filterStart) {
+          // Discount ends before filter starts -> exclude
+          return false;
+        }
+        
+        if (filterEnd && discountStart && discountStart > filterEnd) {
+          // Discount starts after filter ends -> exclude
+          return false;
+        }
+      }
+      
       return true;
     });
   }, [discounts, search, statusFilter, validFrom, validTo]);
 
-  const toggleActive = (id: string) => {
+  const toggleActive = async (id: string | number) => {
     // Extra security: Only Manager can toggle
     if (!isManager) return;
-    setDiscounts(prev => prev.map(d => d.id === id ? { ...d, active: !d.active } : d));
+    
+    // Find the discount being toggled
+    const discountToToggle = discounts.find(d => d.id === id);
+    if (!discountToToggle) return;
+    
+    const newActiveStatus = !discountToToggle.active;
+    
+    // Optimistically update the UI
+    setDiscounts(prev => prev.map(d => d.id === id ? { ...d, active: newActiveStatus } : d));
+    
+    try {
+      // Send the new is_active status along with the full discount payload
+      console.log(`[DiscountManagement] Toggling discount ${id} to is_active=${newActiveStatus}`);
+      
+      // Extract the numeric value from the string (e.g., "50%" -> 50, "Rs. 150" -> 150)
+      const valueStr = discountToToggle.value || '';
+      const valueNum = discountToToggle.kind === 'percent' 
+        ? Number(valueStr.replace('%', ''))
+        : Number(valueStr.replace('Rs.', '').replace(/[^\d.]/g, ''));
+      
+      // Map UI discount type to API discount type
+      const discountType = discountToToggle.kind === 'percent' ? 'Percentage' : 'FixedAmount';
+      
+      // Determine applicable_to and target IDs
+      let applicableTo = 'All';
+      let targetCategoryId = null;
+      let targetProductId = null;
+      
+      if (discountToToggle.applicableTo !== 'All Items') {
+        if (categories.includes(discountToToggle.applicableTo)) {
+          applicableTo = 'Category';
+          targetCategoryId = discountToToggle.applicableTo;
+        } else {
+          // Try to find matching product
+          const matchingProduct = items.find(i => i.name === discountToToggle.applicableTo);
+          if (matchingProduct) {
+            applicableTo = 'Product';
+            targetProductId = matchingProduct.id;
+          }
+        }
+      }
+      
+      // Build complete payload with is_active
+      const updateData: any = {
+        name: discountToToggle.name,
+        discount_type: discountType,
+        value: valueNum,
+        applicable_to: applicableTo,
+        start_date: discountToToggle.startDate || null,
+        end_date: discountToToggle.endDate || null,
+        start_time: null,
+        end_time: null,
+        is_active: newActiveStatus,  // Add the status toggle
+      };
+      
+      // Add target IDs if applicable
+      if (targetCategoryId) {
+        updateData.target_category_id = targetCategoryId;
+        updateData.target_product_id = null;
+      } else if (targetProductId) {
+        updateData.target_product_id = targetProductId;
+        updateData.target_category_id = null;
+      } else {
+        updateData.target_category_id = null;
+        updateData.target_product_id = null;
+      }
+      
+      console.log('[DiscountManagement] Toggling discount with payload:', updateData);
+      
+      await apiClient.discounts.update(id as number, updateData);
+      
+      console.log(`[DiscountManagement] Successfully toggled discount ${id} to is_active=${newActiveStatus}`);
+    } catch (error) {
+      // Revert the UI change on error
+      console.error('[DiscountManagement] Error toggling discount status:', error);
+      setDiscounts(prev => prev.map(d => d.id === id ? { ...d, active: !newActiveStatus } : d));
+      
+      const errorMsg = error instanceof Error ? error.message : 'Failed to toggle discount status';
+      alert(`Failed to toggle discount status: ${errorMsg}`);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!discountToDelete) return;
+    
+    try {
+      setIsDeleting(true);
+      // Make API call to delete discount from backend
+      await apiClient.discounts.delete(discountToDelete.id as number);
+      
+      // Update local state: remove the deleted discount
+      setDiscounts(prev => prev.filter(d => d.id !== discountToDelete.id));
+      
+      // Close modals and reset state
+      setDeleteConfirmOpen(false);
+      setDiscountToDelete(null);
+      
+      console.log('[DiscountManagement] Discount deleted successfully:', discountToDelete.name);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to delete discount';
+      console.error('[DiscountManagement] Error deleting discount:', error);
+      alert(`Failed to delete discount: ${errorMsg}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const deleteSelected = () => {
     const sel = Object.keys(selected).filter(k => selected[k]);
     if (sel.length === 0) return;
-    setDiscounts(prev => prev.filter(d => !sel.includes(d.id)));
+    setDiscounts(prev => prev.filter(d => !sel.includes(String(d.id))));
     setSelected({});
   };
 
-  const toggleSelect = (id: string) => {
-    setSelected(s => ({ ...s, [id]: !s[id] }));
+  const toggleSelect = (id: string | number) => {
+    setSelected(s => ({ ...s, [String(id)]: !s[String(id)] }));
   };
 
   const activeCount = discounts.filter(d => d.active).length;
-  const totalDiscountToday = 1200; 
 
   return (
     <div className="p-6">
       <AddDiscountModal
         open={addDiscountOpen}
         onClose={() => setAddDiscountOpen(false)}
-        onSave={discount => {
-          setDiscounts(prev => [
-            ...prev,
-            {
-              id: discount.id,
-              name: discount.name,
-              kind: discount.type === 'percentage' ? 'percent' : 'fixed',
-              value: discount.type === 'percentage' ? `${discount.value}%` : `Rs. ${discount.value}`,
-              applicableTo:
-                discount.applicableTo === 'all'
-                  ? 'All Items'
-                  : discount.applicableTo === 'category'
-                  ? discount.category
-                  : items.find(i => i.id === discount.item)?.name || '',
-              validity: [discount.startDate, discount.endDate].filter(Boolean).join(' to ') || '—',
-              active: true,
-            },
-          ]);
+        onSave={async (discount) => {
+          try {
+            // Map UI types to API types
+            const discountType = discount.type === 'percentage' ? 'Percentage' : 'FixedAmount';
+            const applicableTo = discount.applicableTo === 'all' ? 'All' : discount.applicableTo === 'category' ? 'Category' : 'Product';
+            
+            // Prepare data for API
+            const createData: any = {
+              name: discount.name.trim(),
+              discount_type: discountType,
+              value: discount.value,
+              applicable_to: applicableTo,
+              start_date: discount.startDate || null,
+              end_date: discount.endDate || null,
+              start_time: discount.startTime || null,
+              end_time: discount.endTime || null,
+            };
+            
+            // Add target IDs based on applicable_to
+            if (applicableTo === 'Category' && discount.category) {
+              createData.target_category_id = discount.category;
+              createData.target_product_id = null;
+            } else if (applicableTo === 'Product' && discount.item) {
+              createData.target_product_id = discount.item;
+              createData.target_category_id = null;
+            } else {
+              createData.target_category_id = null;
+              createData.target_product_id = null;
+            }
+            
+            // Log payload for debugging
+            console.log('[DiscountManagement] Creating discount with payload:', createData);
+            
+            // Make API call to save to database
+            const response = await apiClient.discounts.create(createData);
+            
+            // Update local state only after successful API call
+            setDiscounts(prev => [
+              ...prev,
+              {
+                id: response.id,
+                name: discount.name,
+                kind: discount.type === 'percentage' ? 'percent' : 'fixed',
+                value: discount.type === 'percentage' ? `${discount.value}%` : `Rs. ${discount.value}`,
+                applicableTo:
+                  discount.applicableTo === 'all'
+                    ? 'All Items'
+                    : discount.applicableTo === 'category'
+                    ? discount.category
+                    : items.find(i => i.id === discount.item)?.name || '',
+                validity: formatValidityPeriod(discount.startDate || null, discount.endDate || null),
+                startDate: discount.startDate || null,
+                endDate: discount.endDate || null,
+                active: true,
+              },
+            ]);
+            
+            // Close modal after successful save
+            setAddDiscountOpen(false);
+            console.log('[DiscountManagement] Discount created successfully:', response);
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Failed to create discount';
+            console.error('[DiscountManagement] Error creating discount:', error);
+            alert(`Failed to create discount: ${errorMsg}`);
+          }
         }}
         categories={categories}
         items={items}
@@ -147,29 +402,99 @@ export default function DiscountManagement() {
           setEditingDiscount(null);
         }}
         discount={editingDiscount}
-        onUpdate={updated => {
-          setDiscounts(prev => prev.map(d =>
-            d.id === updated.id
-              ? {
-                  ...d,
-                  name: updated.name,
-                  kind: updated.type === 'percentage' ? 'percent' : 'fixed',
-                  value: updated.type === 'percentage' ? `${updated.value}%` : `Rs. ${updated.value}`,
-                  applicableTo:
-                    updated.applicableTo === 'all'
-                      ? 'All Items'
-                      : updated.applicableTo === 'category'
-                      ? updated.targetId || ''
-                      : items.find(i => i.id === updated.targetId)?.name || '',
-                  validity: [updated.startDate, updated.endDate].filter(Boolean).join(' to ') || '—',
-                }
-              : d
-          ));
-          setEditDiscountOpen(false);
-          setEditingDiscount(null);
+        onUpdate={async (updated) => {
+          try {
+            // Map UI types to API types
+            const discountType = updated.type === 'percentage' ? 'Percentage' : 'FixedAmount';
+            const applicableTo = updated.applicableTo === 'all' ? 'All' : updated.applicableTo === 'category' ? 'Category' : 'Product';
+            
+            // Ensure dates are in YYYY-MM-DD format (or null)
+            const formatDateForAPI = (dateStr: string | undefined): string | null => {
+              if (!dateStr) return null;
+              // If already in YYYY-MM-DD format, return as-is
+              if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+              // Otherwise try to parse and reformat
+              try {
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return null;
+                return date.toISOString().split('T')[0];
+              } catch {
+                return null;
+              }
+            };
+            
+            // Prepare data for API
+            const updateData: any = {
+              name: updated.name,
+              discount_type: discountType,
+              value: updated.value,
+              applicable_to: applicableTo,
+              start_date: formatDateForAPI(updated.startDate),
+              end_date: formatDateForAPI(updated.endDate),
+              start_time: updated.startTime || null,
+              end_time: updated.endTime || null,
+            };
+            
+            // Log for debugging
+            console.log('[DiscountManagement] Updating discount with payload:', updateData);
+            
+            // Add target IDs only if applicable_to requires them
+            if (applicableTo === 'Category' && updated.targetId) {
+              updateData.target_category_id = updated.targetId;
+              updateData.target_product_id = null;
+            } else if (applicableTo === 'Product' && updated.targetId) {
+              updateData.target_product_id = updated.targetId;
+              updateData.target_category_id = null;
+            } else {
+              updateData.target_category_id = null;
+              updateData.target_product_id = null;
+            }
+            
+            // Make API call to update database
+            await apiClient.discounts.update(updated.id as number, updateData);
+            
+            // Update local state only after successful API call
+            setDiscounts(prev => prev.map(d =>
+              d.id === updated.id
+                ? {
+                    ...d,
+                    name: updated.name,
+                    kind: updated.type === 'percentage' ? 'percent' : 'fixed',
+                    value: updated.type === 'percentage' ? `${updated.value}%` : `Rs. ${updated.value}`,
+                    applicableTo:
+                      updated.applicableTo === 'all'
+                        ? 'All Items'
+                        : updated.applicableTo === 'category'
+                        ? updated.targetId || ''
+                        : items.find(i => i.id === updated.targetId)?.name || '',
+                    validity: formatValidityPeriod(updated.startDate || null, updated.endDate || null),
+                    startDate: updated.startDate || null,
+                    endDate: updated.endDate || null,
+                  }
+                : d
+            ));
+            setEditDiscountOpen(false);
+            setEditingDiscount(null);
+            console.log('[DiscountManagement] Discount updated successfully');
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Failed to update discount';
+            console.error('[DiscountManagement] Error updating discount:', error);
+            alert(`Failed to update discount: ${errorMsg}. Please check the date format (must be YYYY-MM-DD).`);
+          }
         }}
         categories={categories}
         items={items}
+      />
+      
+      <DeleteConfirmationModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => {
+          setDeleteConfirmOpen(false);
+          setDiscountToDelete(null);
+        }}
+        onConfirm={handleDelete}
+        itemName={discountToDelete?.name || 'Discount'}
+        isLoading={isDeleting}
       />
       
       {/* KPI Cards */}
@@ -249,10 +574,11 @@ export default function DiscountManagement() {
                   applicableTo = 'item';
                   targetId = items.find(i => i.name === d.applicableTo)?.id;
                 }
-                let startDate = undefined, endDate = undefined;
-                if (d.validity && d.validity.includes(' to ')) {
-                  [startDate, endDate] = d.validity.split(' to ');
-                }
+                
+                // Use raw dates from discount object (YYYY-MM-DD format)
+                // Do NOT parse the formatted validity string
+                const startDate = d.startDate || '';
+                const endDate = d.endDate || '';
 
                 return (
                   <tr key={d.id} className="border-b border-orange-100 hover:bg-[#FFF7F0] transition-colors">
@@ -304,7 +630,10 @@ export default function DiscountManagement() {
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button title="Delete" onClick={() => setDiscounts(prev => prev.filter(x => x.id !== d.id))} className="p-2 rounded hover:bg-orange-100 text-red-500">
+                        <button title="Delete" onClick={() => {
+                          setDiscountToDelete(d);
+                          setDeleteConfirmOpen(true);
+                        }} className="p-2 rounded hover:bg-orange-100 text-red-500">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </td>

@@ -12,6 +12,17 @@ interface CartItem {
   subtotal: number;              // quantity * unit_price (pre-calculated)
 }
 
+interface AvailableDiscount {
+  id: number;
+  name: string;
+  discount_id: string;
+  discount_type: 'Percentage' | 'FixedAmount';
+  value: string | number;
+  applicable_to: 'All' | 'Category' | 'Product';
+  target_category_id?: number;
+  target_product_id?: number;
+}
+
 interface CartPanelProps {
   items: CartItem[];
   billNumber: string;
@@ -21,8 +32,11 @@ interface CartPanelProps {
   isCounterOpen: boolean;
   paymentMethod: 'Cash' | 'Card';
   onPaymentMethodChange: (method: 'Cash' | 'Card') => void;
-  discountAmount: number;
-  onDiscountChange: (amount: number) => void;
+  availableDiscounts: AvailableDiscount[];
+  selectedDiscount: AvailableDiscount | null;
+  onSelectDiscount: (discount: AvailableDiscount | null) => void;
+  calculatedDiscountAmount: number;
+  discountsLoading: boolean;
 }
 
 export function CartPanel({ 
@@ -34,12 +48,15 @@ export function CartPanel({
   isCounterOpen,
   paymentMethod,
   onPaymentMethodChange,
-  discountAmount,
-  onDiscountChange,
+  availableDiscounts,
+  selectedDiscount,
+  onSelectDiscount,
+  calculatedDiscountAmount,
+  discountsLoading,
 }: CartPanelProps) {
   // Safely convert subtotals that might be strings from backend API
   const subtotal = items.reduce((sum, item) => sum + toNumber(item.subtotal), 0);
-  const total = toNumber(subtotal) - toNumber(discountAmount);
+  const total = toNumber(subtotal) - toNumber(calculatedDiscountAmount);
 
   return (
     <div className="h-full flex flex-col bg-white border-l border-gray-200">
@@ -112,17 +129,51 @@ export function CartPanel({
           <span className="tabular-nums">Rs. {subtotal.toFixed(2)}</span>
         </div>
 
-        {/* Discount Input */}
-        <div className="flex items-center justify-between">
-          <span className="text-gray-700">Discount</span>
-          <input
-            type="number"
-            placeholder="0"
-            className="w-24 px-3 py-1 text-right border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
-            value={discountAmount || ''}
-            onChange={(e) => onDiscountChange(Number(e.target.value) || 0)}
-          />
+        {/* Smart Discount Dropdown */}
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <span className="text-gray-700 mt-1">Discount</span>
+          <div className="flex-1 max-w-xs">
+            {discountsLoading ? (
+              <p className="text-sm text-gray-500">Loading discounts...</p>
+            ) : (
+              <select
+                value={selectedDiscount?.id || ''}
+                onChange={(e) => {
+                  const discountId = e.target.value;
+                  const discount = availableDiscounts.find(d => d.id === Number(discountId));
+                  onSelectDiscount(discount || null);
+                }}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="">No Discount</option>
+                {availableDiscounts.map((discount) => {
+                  const valueText =
+                    discount.discount_type === 'Percentage'
+                      ? `${discount.value}%`
+                      : `Rs. ${Number(discount.value).toLocaleString()}`;
+                  return (
+                    <option key={discount.id} value={discount.id}>
+                      {discount.name} - {valueText}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+          </div>
         </div>
+
+        {/* Display Applied Discount Amount */}
+        {calculatedDiscountAmount > 0 && (
+          <div className="flex items-center justify-between text-green-600 text-sm">
+            <span>Discount Applied</span>
+            <span className="tabular-nums font-semibold">
+              -Rs. {calculatedDiscountAmount.toLocaleString('en-IN', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          </div>
+        )}
 
         {/* Payment Method */}
         <div className="flex items-center justify-between">

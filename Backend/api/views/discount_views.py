@@ -60,15 +60,15 @@ class DiscountViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     # Query optimization profiles
     optimized_relations = {
         'list': {
-            'select_related': ['target_category', 'target_product'],
+            'select_related': ['target_category_id', 'target_product_id'],
             'prefetch_related': [],
         },
         'retrieve': {
-            'select_related': ['target_category', 'target_product'],
+            'select_related': ['target_category_id', 'target_product_id'],
             'prefetch_related': [],
         },
         'active': {
-            'select_related': ['target_category', 'target_product'],
+            'select_related': ['target_category_id', 'target_product_id'],
             'prefetch_related': [],
         }
     }

@@ -1,33 +1,29 @@
 import { X, Search, Plus, Edit, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import EditCategoryModal from './EditCategoryModal';
 import { AddProductCategoryModal } from './AddProductCategoryModal';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { useAuth } from '../../context/AuthContext'; // 1. Import Auth Context
+import apiClient from '../../services/api'; // Import API client for delete operations
 
 interface Category {
-    id: string;
+    id: number;
     name: string;
-    lowStockThreshold: number;
+    type: string;
 }
 
 interface CategoryListModalProps {
     isOpen: boolean;
     onClose: () => void;
+    categories: Category[];
+    onCategoriesRefresh?: () => void;
 }
 
-const initialCategories: Category[] = [
-    { id: '#CAT-001', name: 'Buns', lowStockThreshold: 10 },
-    { id: '#CAT-002', name: 'Cakes', lowStockThreshold: 5 },
-    { id: '#CAT-003', name: 'Pastries', lowStockThreshold: 8 },
-    { id: '#CAT-004', name: 'Bread', lowStockThreshold: 12 },
-];
-
-export function CategoryListModal({ isOpen, onClose }: CategoryListModalProps) {
+export function CategoryListModal({ isOpen, onClose, categories = [], onCategoriesRefresh }: CategoryListModalProps) {
     const { user } = useAuth(); // 2. Get User
     const isCashier = user?.role === 'Cashier'; // 3. Check if Cashier
 
-    const [categories, setCategories] = useState<Category[]>(initialCategories);
+    const [localCategories, setLocalCategories] = useState<Category[]>(categories);
     const [searchTerm, setSearchTerm] = useState('');
     
     // Modal states
@@ -36,16 +32,39 @@ export function CategoryListModal({ isOpen, onClose }: CategoryListModalProps) {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+    
+    // Delete operation state
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    
+    // Toast notification state
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean; key: number }>({
+      message: '',
+      type: 'success',
+      visible: false,
+      key: 0,
+    });
+    
+    // Toast helper function
+    const showToast = (message: string, type: 'success' | 'error') => {
+      setToast(prev => ({ message, type, visible: true, key: prev.key + 1 }));
+      setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
+    };
+
+    // Update local state when prop changes
+    useEffect(() => {
+        setLocalCategories(categories);
+    }, [categories]);
 
     // Filter Logic
-    const filteredCategories = categories.filter(cat =>
+    const filteredCategories = localCategories.filter(cat =>
         cat.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cat.id.toLowerCase().includes(searchTerm.toLowerCase())
+        cat.id.toString().toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     // --- HANDLERS ---
-    const handleDeleteCategory = (id: string) => {
-        setCategories(categories.filter(cat => cat.id !== id));
+    const handleDeleteCategory = (id: number) => {
+        setLocalCategories(localCategories.filter(cat => cat.id !== id));
     };
 
     const handleOpenEditModal = (category: Category) => {
@@ -53,17 +72,18 @@ export function CategoryListModal({ isOpen, onClose }: CategoryListModalProps) {
         setIsEditModalOpen(true);
     };
 
-    const handleEditCategory = (data: { id: string; name: string; lowStockThreshold: number }) => {
-        setCategories(categories.map(cat =>
-            cat.id === data.id ? { ...cat, name: data.name, lowStockThreshold: data.lowStockThreshold } : cat
+    const handleEditCategory = (data: { id: number; name: string }) => {
+        setLocalCategories(localCategories.map(cat =>
+            cat.id === data.id ? { ...cat, name: data.name } : cat
         ));
         setIsEditModalOpen(false);
         setEditingCategory(null);
     };
 
-    const handleAddCategory = (data: { name: string; lowStockThreshold: number }) => {
-        const newId = `#CAT-${String(categories.length + 1).padStart(3, '0')}`;
-        setCategories([...categories, { id: newId, ...data }]);
+    const handleAddCategory = (data: { name: string }) => {
+        if (onCategoriesRefresh) {
+            onCategoriesRefresh();
+        }
         setIsAddModalOpen(false);
     };
 
@@ -72,12 +92,38 @@ export function CategoryListModal({ isOpen, onClose }: CategoryListModalProps) {
         setIsDeleteModalOpen(true);
     };
 
-    const handleConfirmDelete = () => {
-        if (deletingCategory) {
-            setCategories(categories.filter(cat => cat.id !== deletingCategory.id));
+    const handleConfirmDelete = async () => {
+        if (!deletingCategory) return;
+        
+        setIsDeleting(true);
+        setDeleteError(null);
+        
+        try {
+            // Make API DELETE request to backend
+            await apiClient.categories.delete(deletingCategory.id);
+            
+            // Remove from local state
+            setLocalCategories(localCategories.filter(cat => cat.id !== deletingCategory.id));
+            
+            // Show success toast
+            showToast(`Category "${deletingCategory.name}" deleted successfully!`, 'success');
+            
+            // Close modal and reset state
+            setIsDeleteModalOpen(false);
+            setDeletingCategory(null);
+            
+            // Trigger refresh callback to update parent component
+            if (onCategoriesRefresh) {
+                onCategoriesRefresh();
+            }
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to delete category';
+            setDeleteError(errorMessage);
+            showToast(`Error: ${errorMessage}`, 'error');
+            console.error('[Delete Category Error]', err);
+        } finally {
+            setIsDeleting(false);
         }
-        setIsDeleteModalOpen(false);
-        setDeletingCategory(null);
     };
 
     return (
@@ -119,52 +165,54 @@ export function CategoryListModal({ isOpen, onClose }: CategoryListModalProps) {
                             </div>
                         </div>
 
-                        {/* Table */}
-                        <div className="overflow-auto flex-1">
+                        {/* Table - Fixed Height Scrollable Container */}
+                        <div className="h-[400px] overflow-y-scroll overflow-x-hidden border-b">
                             <table className="w-full">
                                 <thead className="bg-gray-50 sticky top-0">
                                     <tr>
                                         <th className="py-3 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">ID</th>
                                         <th className="py-3 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-auto">Category Name</th>
-                                        <th className="py-3 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Low Stock</th>
                                         {/* Hide Actions Header for Cashier */}
                                         {!isCashier && <th className="py-3 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white">
-                                    {filteredCategories.map((category) => (
-                                        <tr key={category.id} className="border-b border-gray-200 hover:bg-gray-50">
-                                            <td className="px-3 py-4 text-sm font-medium text-gray-900 w-16">{category.id}</td>
-                                            <td className="px-3 py-4 text-sm text-gray-900 w-auto">{category.name}</td>
-                                            <td className="px-3 py-4 text-sm text-gray-900 w-28">
-                                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                                                    ≤ {category.lowStockThreshold} qty
-                                                </span>
+                                    {filteredCategories.length > 0 ? (
+                                        filteredCategories.map((category) => (
+                                            <tr key={category.id} className="border-b border-gray-200 hover:bg-gray-50">
+                                                <td className="px-3 py-4 text-sm font-medium text-gray-900 w-16">CAT-{category.id}</td>
+                                                <td className="px-3 py-4 text-sm text-gray-900 w-auto">{category.name}</td>
+                                                {/* 5. Hide Edit/Delete Buttons for Cashier */}
+                                                {!isCashier && (
+                                                    <td className="px-3 py-4 text-sm font-medium w-16">
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                className="p-1 text-orange-600 hover:bg-orange-50 rounded"
+                                                                title="Edit"
+                                                                onClick={() => handleOpenEditModal(category)}
+                                                            >
+                                                                <Edit className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                                                onClick={() => handleOpenDeleteModal(category)}
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={!isCashier ? 3 : 2} className="px-3 py-8 text-center text-gray-500">
+                                                No categories found
                                             </td>
-                                            {/* 5. Hide Edit/Delete Buttons for Cashier */}
-                                            {!isCashier && (
-                                                <td className="px-3 py-4 text-sm font-medium w-16">
-                                                    <div className="flex items-center gap-2">
-                                                        <button
-                                                            type="button"
-                                                            className="p-1 text-orange-600 hover:bg-orange-50 rounded"
-                                                            title="Edit"
-                                                            onClick={() => handleOpenEditModal(category)}
-                                                        >
-                                                            <Edit className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                                            onClick={() => handleOpenDeleteModal(category)}
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            )}
                                         </tr>
-                                    ))}
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -183,6 +231,7 @@ export function CategoryListModal({ isOpen, onClose }: CategoryListModalProps) {
                 onClose={() => { setIsEditModalOpen(false); setEditingCategory(null); }}
                 initialData={editingCategory}
                 onSave={handleEditCategory}
+                onCategoryUpdated={onCategoriesRefresh}
             />
 
             <DeleteConfirmationModal
@@ -190,7 +239,20 @@ export function CategoryListModal({ isOpen, onClose }: CategoryListModalProps) {
                 onClose={() => { setIsDeleteModalOpen(false); setDeletingCategory(null); }}
                 onConfirm={handleConfirmDelete}
                 itemName={deletingCategory?.name || ''}
+                isLoading={isDeleting}
             />
+            
+            {/* Toast Notification */}
+            {toast.visible && (
+              <div
+                key={toast.key}
+                className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white font-medium z-50 animate-fade-in ${
+                  toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+                }`}
+              >
+                {toast.message}
+              </div>
+            )}
         </>
     );
 }

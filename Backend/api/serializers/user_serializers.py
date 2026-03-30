@@ -33,10 +33,12 @@ class UserListSerializer(serializers.ModelSerializer):
             'email',
             'full_name',
             'employee_id',
+            'nic',
             'role',
             'status',
             'contact',
             'avatar_color',
+            'is_active',
             'created_at',
             'updated_at'
         ]
@@ -242,7 +244,8 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             'nic',
             'role',
             'status',
-            'avatar_color'
+            'avatar_color',
+            'is_active'
         ]
         read_only_fields = ['username']  # Don't allow username changes
     

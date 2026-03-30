@@ -5,7 +5,7 @@ from api.models import Category
 class CategoryListSerializer(serializers.ModelSerializer):
     """
     Serializer for listing categories (lightweight)
-    Shows: category_id, name, type, description
+    Shows: category_id, name, type, description, low_stock_alert
     """
     
     class Meta:
@@ -16,6 +16,7 @@ class CategoryListSerializer(serializers.ModelSerializer):
             'name',
             'type',
             'description',
+            'low_stock_alert',
             'created_at',
             'updated_at',
         ]
@@ -44,6 +45,7 @@ class CategoryDetailSerializer(serializers.ModelSerializer):
             'name',
             'type',
             'description',
+            'low_stock_alert',
             'item_count',
             'created_at',
             'updated_at',
@@ -68,7 +70,7 @@ class CategoryCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating categories
     Requires: name, type
-    Optional: description
+    Optional: description, low_stock_alert
     """
     
     class Meta:
@@ -77,6 +79,7 @@ class CategoryCreateSerializer(serializers.ModelSerializer):
             'name',
             'type',
             'description',
+            'low_stock_alert',
         ]
     
     def validate_name(self, value):
@@ -124,14 +127,27 @@ class CategoryCreateSerializer(serializers.ModelSerializer):
 class CategoryUpdateSerializer(serializers.ModelSerializer):
     """
     Serializer for updating categories
-    name and type are read-only (can't change once created)
-    Only description can be updated
+    
+    Updatable fields:
+    - name: Can be updated for existing categories
+    - description: Optional detailed description
+    - low_stock_alert: Optional threshold (null for Ingredient categories)
+    
+    Read-only fields:
+    - type: Cannot be changed once created
+    - category_id: Auto-generated, immutable
     """
     
     class Meta:
         model = Category
         fields = [
+            'name',
             'description',
+            'low_stock_alert',
+        ]
+        read_only_fields = [
+            'type',
+            'category_id',
         ]
 
 

@@ -4,7 +4,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.pagination import PageNumberPagination
-from django_filters.rest_framework import DjangoFilterBackend
+# django_filters removed due to Django 6.0 compatibility
+# from django_filters.rest_framework import DjangoFilterBackend
 
 from api.models import Category
 from api.permissions import IsManager
@@ -45,7 +46,7 @@ class CategoryViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     """
     
     queryset = Category.objects.all()
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filter_backends = [SearchFilter, OrderingFilter]
     pagination_class = CategoryPagination
     
     # Query optimization profiles

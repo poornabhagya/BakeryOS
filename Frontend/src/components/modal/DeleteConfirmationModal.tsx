@@ -8,11 +8,12 @@ interface DeleteConfirmationModalProps {
   onConfirm: () => void;
   itemName: string;
   onConfirmOnly?: () => void; // Optional, for confirm only
+  isLoading?: boolean; // Optional loading state
 }
 
 
 
-export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ isOpen, onClose, onConfirm, itemName, onConfirmOnly }) => {
+export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ isOpen, onClose, onConfirm, itemName, onConfirmOnly, isLoading = false }) => {
   if (!isOpen) return null;
 
   return (
@@ -45,17 +46,26 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
           <div className="flex flex-row gap-3 w-full items-center justify-center mt-2">
             <button
               onClick={onClose}
-              className="flex-1 max-w-[120px] px-4 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+              disabled={isLoading}
+              className="flex-1 max-w-[120px] px-4 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
               type="button"
             >
               Cancel
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 max-w-[120px] px-4 py-2 rounded-lg bg-red-500 text-white font-bold shadow hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-300"
+              disabled={isLoading}
+              className="flex-1 max-w-[120px] px-4 py-2 rounded-lg bg-red-500 text-white font-bold shadow hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               type="button"
             >
-              Delete
+              {isLoading ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
             </button>
             <button
               onClick={onConfirmOnly ? onConfirmOnly : onConfirm}

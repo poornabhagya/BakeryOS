@@ -22,7 +22,7 @@ INSTALLED_APPS = [
     'rest_framework', 
     'rest_framework.authtoken',  # Token auth
     'corsheaders',
-    'drf_spectacular',
+    # 'drf_spectacular',  # Temporarily disabled due to Django 6.0 compatibility issues
     
     # Local apps
     'api', 
@@ -131,15 +131,10 @@ CACHES = {
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_FILTER_BACKENDS': (
-        'django_filters.rest_framework.DjangoFilterBackend',
-    ),
-    'EXCEPTION_HANDLER': 'api.error_handlers.custom_exception_handler',
 }
 
 # JWT Configuration
@@ -165,61 +160,6 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
 # Spectacular API Documentation
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'BakeryOS API',
-    'DESCRIPTION': 'Bakery Management System API - Complete inventory, sales, and production management',
-    'VERSION': '1.0.0',
-    'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
-    'SERVE_INCLUDE_SCHEMA': True,
-    
-    # Schema generation settings
-    'SCHEMA_PATH_PREFIX': '/api/',
-    'PREPROCESSING_HOOKS': [],
-    'POSTPROCESSING_HOOKS': [],
-    
-    # UI settings
-    'SWAGGER_UI_SETTINGS': {
-        'deepLinking': True,
-        'persistAuthorization': True,
-        'displayOperationId': True,
-        'defaultModelsExpandDepth': 2,
-        'defaultModelExpandDepth': 2,
-        'showCommonExtensions': True,
-    },
-    
-    # Operation configuration
-    'OPERATION_ID_FUNCTION': 'drf_spectacular.utils.camelize_operation_id',
-    'OPERATION_TITLE_FUNCTION': None,
-    
-    # Security schemes
-    'AUTHENTICATION_WHITELIST': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ],
-    
-    # Enum naming
-    'ENUM_FIELD_MAPPING': {
-        'api.models.User.role': '__str__',
-    },
-    
-    # API Info
-    'CONTACT': {
-        'name': 'BakeryOS Development Team',
-        'url': 'https://bakeryos.local',
-        'email': 'support@bakeryos.local',
-    },
-    'LICENSE': {
-        'name': 'MIT License',
-        'url': 'https://opensource.org/licenses/MIT',
-    },
-    
-    # External documentation
-    'EXTERNAL_DOCS': {
-        'description': 'API Documentation Guide',
-        'url': '/api/docs/guide/',
-    },
-    
-    # Sorting and filtering
-    'SORT_OPERATION_PARAMETERS_ALPHABETICALLY': True,
-    'COMPONENT_SPLIT_REQUEST': True,
-    'COMPONENT_NO_READ_ONLY_REQUIRED': True,
-}
+# SPECTACULAR_SETTINGS disabled due to drf-spectacular incompatibility
+# Will be re-enabled after upgrading to compatible versions
+SPECTACULAR_SETTINGS = {}

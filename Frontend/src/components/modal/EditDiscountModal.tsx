@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Loader } from 'lucide-react';
 
 interface Discount {
   id: string;
@@ -19,7 +19,7 @@ interface EditDiscountModalProps {
   open: boolean;
   onClose: () => void;
   discount: Discount | null;
-  onUpdate: (updatedDiscount: Discount) => void;
+  onUpdate: (updatedDiscount: Discount) => Promise<void>;
   categories: string[];
   items: { id: string; name: string }[];
 }
@@ -47,6 +47,7 @@ export const EditDiscountModal: React.FC<EditDiscountModalProps> = ({ open, onCl
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [touched, setTouched] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (open && discount) {
@@ -72,22 +73,27 @@ export const EditDiscountModal: React.FC<EditDiscountModalProps> = ({ open, onCl
 
   if (!open || !discount) return null;
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     setTouched(true);
     if (!canUpdate) return;
-    onUpdate({
-      id: discount.id,
-      name: name.trim(),
-      type,
-      value: Number(value),
-      applicableTo,
-      targetId: applicableTo === 'category' ? category : applicableTo === 'item' ? item : undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      startTime: startTime || undefined,
-      endTime: endTime || undefined,
-    });
-    onClose();
+    
+    setIsLoading(true);
+    try {
+      await onUpdate({
+        id: discount.id,
+        name: name.trim(),
+        type,
+        value: Number(value),
+        applicableTo,
+        targetId: applicableTo === 'category' ? category : applicableTo === 'item' ? item : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        startTime: startTime || undefined,
+        endTime: endTime || undefined,
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const modalContent = (
@@ -259,10 +265,11 @@ export const EditDiscountModal: React.FC<EditDiscountModalProps> = ({ open, onCl
           <button
             type="button"
             onClick={handleUpdate}
-            disabled={!canUpdate}
-            className="px-4 py-2 rounded-lg bg-orange-600 text-white font-bold hover:bg-orange-700 transition-colors disabled:opacity-60"
+            disabled={!canUpdate || isLoading}
+            className="px-4 py-2 rounded-lg bg-orange-600 text-white font-bold hover:bg-orange-700 transition-colors disabled:opacity-60 flex items-center gap-2"
           >
-            Update Discount
+            {isLoading && <Loader className="w-4 h-4 animate-spin" />}
+            {isLoading ? 'Updating...' : 'Update Discount'}
           </button>
         </div>
       </div>

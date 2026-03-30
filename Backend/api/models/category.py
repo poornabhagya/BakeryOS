@@ -42,6 +42,13 @@ class Category(models.Model):
         help_text="Detailed description of category"
     )
     
+    low_stock_alert = models.IntegerField(
+        blank=True,
+        null=True,
+        default=None,
+        help_text="Quantity threshold for low stock alerts (for Product categories)"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

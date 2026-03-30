@@ -1,53 +1,77 @@
-import { X, Info } from 'lucide-react';
+import { X, Info, Loader } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import apiClient from '../../../services/api';
 
 interface IngredientCategoryData {
   id?: string;
   name: string;
-  lowStockThreshold: number;
+  description?: string;
 }
 
 interface AddIngredientCategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialData?: IngredientCategoryData | null;
-  onSave?: (data: { name: string; lowStockThreshold: number }) => void;
+  onCategoryAdded?: () => void;
 }
 
-export function AddIngredientCategoryModal({ isOpen, onClose, initialData, onSave }: AddIngredientCategoryModalProps) {
+export function AddIngredientCategoryModal({ isOpen, onClose, initialData, onCategoryAdded }: AddIngredientCategoryModalProps) {
   const [categoryName, setCategoryName] = useState('');
-  const [lowStockThreshold, setLowStockThreshold] = useState(10);
   const [description, setDescription] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialData) {
       setCategoryName(initialData.name);
-      setLowStockThreshold(initialData.lowStockThreshold);
+      setDescription(initialData.description || '');
     } else {
       setCategoryName('');
-      setLowStockThreshold(10);
+      setDescription('');
+      setError(null);
     }
   }, [initialData, isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const data = { name: categoryName, lowStockThreshold, description };
-    if (onSave) {
-      onSave(data);
-    } else {
-      console.log('Category added:', data);
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const payload = {
+        name: categoryName,
+        type: 'Ingredient' as const,
+        description: description,
+        low_stock_alert: null,
+      };
+
+      const response = await apiClient.categories.create(payload);
+      console.log('[Category Created]', response);
+
+      // Reset form
+      setCategoryName('');
+      setDescription('');
+
+      // Trigger parent callback to refresh categories list
+      if (onCategoryAdded) {
+        onCategoryAdded();
+      }
+
+      // Close modal
       onClose();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create category';
+      setError(errorMessage);
+      console.error('[Category Creation Error]', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const categoryId = initialData?.id || '#CAT-IN-2024'; // Mock auto-generated ID
-
-  const isEditing = !!initialData;
-
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
         {/* Modal Header */}
@@ -68,19 +92,12 @@ export function AddIngredientCategoryModal({ isOpen, onClose, initialData, onSav
 
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Category ID */}
-          <div>
-            <label className="block text-sm text-gray-700 mb-2">
-              Category ID
-            </label>
-            <input
-              type="text"
-              value={categoryId}
-              disabled
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
-            />
-          </div>
-
+          {/* Error Message */}
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
           {/* Category Name */}
           <div>
             <label className="block text-sm text-gray-700 mb-2">
@@ -91,7 +108,8 @@ export function AddIngredientCategoryModal({ isOpen, onClose, initialData, onSav
               value={categoryName}
               onChange={(e) => setCategoryName(e.target.value)}
               placeholder="e.g., Flours, Dairy"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+              disabled={isLoading}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
               required
             />
           </div>
@@ -105,7 +123,8 @@ export function AddIngredientCategoryModal({ isOpen, onClose, initialData, onSav
               value={description}
               onChange={e => setDescription(e.target.value)}
               placeholder="Enter a description for this category"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+              disabled={isLoading}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
               rows={3}
             />
           </div>
@@ -115,19 +134,23 @@ export function AddIngredientCategoryModal({ isOpen, onClose, initialData, onSav
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+              disabled={isLoading}
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors"
+              disabled={isLoading || !categoryName.trim()}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              {isEditing ? 'Update Category' : 'Save Category'}
+              {isLoading && <Loader className="w-4 h-4 animate-spin" />}
+              {isLoading ? 'Saving...' : 'Save Category'}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

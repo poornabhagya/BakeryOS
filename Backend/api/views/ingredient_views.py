@@ -4,7 +4,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import F, Count
-from django_filters.rest_framework import DjangoFilterBackend
+# django_filters removed due to Django 6.0 compatibility
+# from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from api.models import Ingredient, Category
@@ -44,27 +45,31 @@ class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     Filtering:
     - ?category_id=1        Filter by category
     - ?is_low_stock=true    Filter low stock only
-    - ?is_active=true       Show only active
+    - ?is_active=true       Show only active ingredients
+    - ?is_active=false      Show only inactive ingredients
     - ?search=Flour         Search by name
     - ?ordering=name        Sort by field
+    
+    Note: Manager portal shows all ingredients (active and inactive) by default.
+    Use ?is_active=true/false query params to filter if needed.
     """
     
-    queryset = Ingredient.objects.filter(is_active=True)
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    queryset = Ingredient.objects.all()
+    filter_backends = [SearchFilter, OrderingFilter]
     pagination_class = IngredientPagination
     
     # Query optimization profiles
     optimized_relations = {
         'list': {
-            'select_related': ['category'],
+            'select_related': ['category_id'],
             'prefetch_related': [],
         },
         'retrieve': {
-            'select_related': ['category'],
+            'select_related': ['category_id'],
             'prefetch_related': ['batches', 'stock_history'],
         },
         'low_stock': {
-            'select_related': ['category'],
+            'select_related': ['category_id'],
             'prefetch_related': [],
         }
     }
@@ -174,8 +179,7 @@ class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         Response: List of low-stock ingredients with quantity info
         """
         low_stock_ingredients = self.queryset.filter(
-            total_quantity__lt=F('low_stock_threshold'),
-            is_active=True
+            total_quantity__lt=F('low_stock_threshold')
         ).order_by('total_quantity')
         
         serializer = IngredientListSerializer(low_stock_ingredients, many=True)
@@ -212,7 +216,7 @@ class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         
         Endpoint: GET /api/ingredients/by-category/
         
-        Response: Grouped ingredients by category
+        Response: Grouped ingredients by category (includes both active and inactive)
         """
         categories = Category.objects.filter(
             type='Ingredient'
@@ -220,7 +224,7 @@ class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         
         result = []
         for category in categories:
-            ingredients = category.ingredients.filter(is_active=True)
+            ingredients = category.ingredients.all()
             result.append({
                 'category_id': category.id,
                 'category_name': category.name,
@@ -237,11 +241,10 @@ class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         
         Endpoint: GET /api/ingredients/out-of-stock/
         
-        Response: List of ingredients with 0 quantity
+        Response: List of ingredients with 0 quantity (includes both active and inactive)
         """
         out_of_stock = self.queryset.filter(
-            total_quantity__lte=0,
-            is_active=True
+            total_quantity__lte=0
         )
         
         serializer = IngredientListSerializer(out_of_stock, many=True)

@@ -573,7 +573,9 @@ describe('Integration: Storekeeper Workflow', () => {
 **Goal:** Verify manager can access full dashboard and manage users
 
 #### Steps:
-
+const handleAddCategory = async (data) => {
+  await api.post('/categories/', data);
+};
 ```
 ✅ Step 1: Login
   1. Go to http://localhost:5173
