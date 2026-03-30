@@ -147,26 +147,63 @@ export default function DiscountManagement() {
           setEditingDiscount(null);
         }}
         discount={editingDiscount}
-        onUpdate={updated => {
-          setDiscounts(prev => prev.map(d =>
-            d.id === updated.id
-              ? {
-                  ...d,
-                  name: updated.name,
-                  kind: updated.type === 'percentage' ? 'percent' : 'fixed',
-                  value: updated.type === 'percentage' ? `${updated.value}%` : `Rs. ${updated.value}`,
-                  applicableTo:
-                    updated.applicableTo === 'all'
-                      ? 'All Items'
-                      : updated.applicableTo === 'category'
-                      ? updated.targetId || ''
-                      : items.find(i => i.id === updated.targetId)?.name || '',
-                  validity: [updated.startDate, updated.endDate].filter(Boolean).join(' to ') || '—',
-                }
-              : d
-          ));
-          setEditDiscountOpen(false);
-          setEditingDiscount(null);
+        onUpdate={async (updated) => {
+          try {
+            // Map UI types to API types
+            const discountType = updated.type === 'percentage' ? 'Percentage' : 'FixedAmount';
+            const applicableTo = updated.applicableTo === 'all' ? 'All' : updated.applicableTo === 'category' ? 'Category' : 'Product';
+            
+            // Prepare data for API
+            const updateData: any = {
+              name: updated.name,
+              discount_type: discountType,
+              value: updated.value,
+              applicable_to: applicableTo,
+              start_date: updated.startDate || null,
+              end_date: updated.endDate || null,
+              start_time: updated.startTime || null,
+              end_time: updated.endTime || null,
+            };
+            
+            // Add target IDs only if applicable_to requires them
+            if (applicableTo === 'Category' && updated.targetId) {
+              updateData.target_category_id = updated.targetId;
+              updateData.target_product_id = null;
+            } else if (applicableTo === 'Product' && updated.targetId) {
+              updateData.target_product_id = updated.targetId;
+              updateData.target_category_id = null;
+            } else {
+              updateData.target_category_id = null;
+              updateData.target_product_id = null;
+            }
+            
+            // Make API call to update database
+            await apiClient.discounts.update(updated.id as number, updateData);
+            
+            // Update local state only after successful API call
+            setDiscounts(prev => prev.map(d =>
+              d.id === updated.id
+                ? {
+                    ...d,
+                    name: updated.name,
+                    kind: updated.type === 'percentage' ? 'percent' : 'fixed',
+                    value: updated.type === 'percentage' ? `${updated.value}%` : `Rs. ${updated.value}`,
+                    applicableTo:
+                      updated.applicableTo === 'all'
+                        ? 'All Items'
+                        : updated.applicableTo === 'category'
+                        ? updated.targetId || ''
+                        : items.find(i => i.id === updated.targetId)?.name || '',
+                    validity: [updated.startDate, updated.endDate].filter(Boolean).join(' to ') || '—',
+                  }
+                : d
+            ));
+            setEditDiscountOpen(false);
+            setEditingDiscount(null);
+          } catch (error) {
+            console.error('Error updating discount:', error);
+            alert('Failed to update discount. Please try again.');
+          }
         }}
         categories={categories}
         items={items}

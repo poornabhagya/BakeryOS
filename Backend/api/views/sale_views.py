@@ -325,3 +325,36 @@ class SaleViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
             'items': serializer.data,
             'item_count': items.count()
         })
+    
+    @action(detail=False, methods=['get'], url_path='next-bill-number')
+    def get_next_bill_number(self, request):
+        """Get the next available bill number"""
+        try:
+            # Get the latest sale
+            latest_sale = Sale.objects.all().order_by('-id').first()
+            
+            if not latest_sale or not latest_sale.bill_number:
+                # No sales yet, start from 1001
+                next_bill_num = 1001
+            else:
+                # Extract numeric part from bill_number (format: "BILL-XXXX")
+                bill_str = latest_sale.bill_number
+                if bill_str.startswith('BILL-'):
+                    current_num = int(bill_str.replace('BILL-', ''))
+                    next_bill_num = current_num + 1
+                else:
+                    # Fallback if format is different
+                    next_bill_num = 1001
+            
+            # Format as "BILL-XXXX"
+            next_bill_number = f"BILL-{str(next_bill_num).zfill(4)}"
+            
+            return Response({
+                'next_bill_number': next_bill_number,
+                'next_number': next_bill_num
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to get next bill number: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

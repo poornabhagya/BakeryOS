@@ -107,3 +107,14 @@ export interface UiSaleItem extends Omit<ApiSaleItem, 'quantity' | 'unit_price' 
   unit_price: number;
   subtotal: number;
 }
+
+/**
+ * Sale Detail types - includes items array from detail endpoint
+ */
+export interface ApiSaleDetail extends ApiSale {
+  items: ApiSaleItem[];
+}
+
+export interface UiSaleDetail extends UiSale {
+  items: UiSaleItem[];
+}

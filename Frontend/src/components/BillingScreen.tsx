@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search, X, Plus, FileText, Printer, Loader } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { CartPanel } from './CartPanel';
 import { Badge } from './ui/badge';
 import { Card } from './ui/card';
 import { useAuth } from '../context/AuthContext';
 import { toNumber, multiplyNumeric } from '../utils/numericUtils';
-import apiClient from '../services/api';
+import apiClient, { categoryApi } from '../services/api';
 import { convertApiProductToUi } from '../utils/conversions';
 
 interface Product {
@@ -93,8 +95,6 @@ const products: Product[] = [
   },
 ];
 
-const categories = ['All', 'Buns', 'Bread', 'Cakes', 'Drinks'];
-
 // --- Bill Number Generator ---
 function generateBillNumber(counter: number): string {
   return `BILL-${String(counter).padStart(4, '0')}`;
@@ -105,43 +105,146 @@ export function BillingScreen() {
 
     // --- State: API Data Fetching ---
     const [products, setProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([{ id: 0, name: 'All' }]);
     const [isLoading, setIsLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    const [categoriesLoading, setCategoriesLoading] = useState(true);
 
-    // --- Fetch Products from API ---
+    // --- Bill Counter (fetched from backend) ---
+    const billCounter = useRef(1001);
+    const printableRef = useRef<HTMLDivElement>(null);
+    const [currentBillNumber, setCurrentBillNumber] = useState('BILL-1001');
+
+    // --- Fetch Products and Next Bill Number from API ---
     useEffect(() => {
-      const fetchProducts = async () => {
+      const fetchInitialData = async () => {
         try {
           setIsLoading(true);
           setFetchError(null);
-          const response = await apiClient.products.getAll();
-          // response.items already contains UI-formatted products
-          setProducts(response.items);
+
+          // Fetch products
+          const productsResponse = await apiClient.products.getAll();
+          setProducts(productsResponse.items);
+
+          // Fetch next bill number from backend
+          const billResponse = await apiClient.sales.getNextBillNumber();
+          if (billResponse && billResponse.next_number) {
+            billCounter.current = billResponse.next_number;
+            setCurrentBillNumber(billResponse.next_bill_number);
+            console.log('[Bill Number Fetched]', billResponse.next_bill_number);
+          }
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : 'Failed to fetch products';
+          const errorMsg = error instanceof Error ? error.message : 'Failed to fetch initial data';
           setFetchError(errorMsg);
-          console.error('Error fetching products:', error);
+          console.error('Error fetching initial data:', error);
         } finally {
           setIsLoading(false);
         }
       };
 
-      fetchProducts();
+      fetchInitialData();
     }, []);
 
-    // --- Bill Counter (will come from backend later) ---
-    const billCounter = useRef(1001);
-    const [currentBillNumber, setCurrentBillNumber] = useState(() => generateBillNumber(billCounter.current));
+    // --- Fetch Categories from API ---
+    useEffect(() => {
+      const fetchCategories = async () => {
+        try {
+          setCategoriesLoading(true);
+          // Fetch only Product categories (not Ingredient categories)
+          const fetchedCategories = await categoryApi.getProducts();
+          setCategories([
+            { id: 0, name: 'All' },
+            ...(fetchedCategories || []).map((cat: any) => ({
+              id: cat.id,
+              name: cat.name,
+            })),
+          ]);
+          console.log('[Product Categories Fetched]', fetchedCategories);
+        } catch (error) {
+          console.error('Error fetching product categories:', error);
+          // Set default categories on error
+          setCategories([{ id: 0, name: 'All' }]);
+        } finally {
+          setCategoriesLoading(false);
+        }
+      };
+
+      fetchCategories();
+    }, []);
+
+    // --- Fetch Active Discounts from API ---
+    useEffect(() => {
+      const fetchDiscounts = async () => {
+        try {
+          setDiscountsLoading(true);
+          setDiscountsError(null);
+          const fetchedDiscounts = await apiClient.discounts.getActive();
+          setAvailableDiscounts(fetchedDiscounts || []);
+          console.log('[Active Discounts Fetched]', fetchedDiscounts);
+        } catch (error) {
+          console.error('Error fetching active discounts:', error);
+          setDiscountsError('Failed to load discounts');
+          setAvailableDiscounts([]);
+        } finally {
+          setDiscountsLoading(false);
+        }
+      };
+
+      fetchDiscounts();
+    }, []);
+
+    // --- Fetch Latest Sale (Previous Bill) on Mount ---
+    useEffect(() => {
+      const fetchLatestSale = async () => {
+        try {
+          const latestSale = await apiClient.sales.getLatestWithItems();
+          
+          if (latestSale) {
+            // Convert UiSaleItem array to CartItem format for previousBill display
+            const convertedItems = latestSale.items.map(saleItem => ({
+              id: saleItem.product_id_val,
+              name: saleItem.product_name,
+              quantity: saleItem.quantity,
+              unit_price: saleItem.unit_price,
+              subtotal: saleItem.subtotal,
+              selling_price: saleItem.unit_price,
+              current_stock: 0, // Not needed for display
+              product_id: saleItem.product_id.toString(),
+              category_id: 0,
+              category_name: '',
+            })) as CartItem[];
+            
+            const previousBillData = {
+              bill_number: latestSale.bill_number,
+              items: convertedItems,
+              subtotal: latestSale.subtotal,
+              discount: latestSale.discount_amount,
+              total: latestSale.total_amount,
+              created_at: latestSale.date_time,
+            };
+            
+            setPreviousBill(previousBillData);
+            console.log('[Latest Sale Fetched for Previous Bill Summary]', previousBillData);
+          }
+        } catch (error) {
+          console.error('Error fetching latest sale:', error);
+          // Silent fail - it's okay if there's no previous bill
+        }
+      };
+
+      fetchLatestSale();
+    }, []);
 
     // Toast Notification State
-    const [toast, setToast] = useState<{ message: string; type: 'success' | 'close'; visible: boolean; key: number }>({ message: '', type: 'success', visible: false, key: 0 });
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'close' | 'error'; visible: boolean; key: number }>({ message: '', type: 'success', visible: false, key: 0 });
 
     // Toast Helper
-    const showToast = (message: string, type: 'success' | 'close') => {
+    const showToast = (message: string, type: 'success' | 'close' | 'error') => {
       console.log('[Toast Triggered]', { message, type });
       setToast(prev => ({ message, type, visible: true, key: prev.key + 1 }));
       setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
     };
+  // Cart and bill state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -150,7 +253,107 @@ export function BillingScreen() {
   const [isCounterOpen, setIsCounterOpen] = useState(false);
   // Payment method & discount state
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card'>('Cash');
-  const [discountAmount, setDiscountAmount] = useState(0);
+  
+  // Discount state - Smart discounts instead of manual input
+  interface AvailableDiscount {
+    id: number;
+    name: string;
+    discount_id: string;
+    discount_type: 'Percentage' | 'FixedAmount';
+    value: string | number;
+    applicable_to: 'All' | 'Category' | 'Product';
+    target_category_id?: number;
+    target_product_id?: number;
+  }
+  
+  const [availableDiscounts, setAvailableDiscounts] = useState<AvailableDiscount[]>([]);
+  const [selectedDiscount, setSelectedDiscount] = useState<AvailableDiscount | null>(null);
+  const [calculatedDiscountAmount, setCalculatedDiscountAmount] = useState(0);
+  const [discountsError, setDiscountsError] = useState<string | null>(null);
+  const [discountsLoading, setDiscountsLoading] = useState(true);
+
+  // Previous Bill Summary State
+  const [previousBill, setPreviousBill] = useState<{
+    bill_number: string;
+    items: CartItem[];
+    subtotal: number;
+    discount: number;
+    total: number;
+    created_at?: string;
+  } | null>(null);
+
+  // --- Discount Computation Logic ---
+  const isDiscountApplicable = (discount: AvailableDiscount): boolean => {
+    if (cart.length === 0) return false;
+
+    if (discount.applicable_to === 'All') {
+      // Applies to entire cart
+      return true;
+    } else if (discount.applicable_to === 'Category') {
+      // Only applicable if cart contains item from target category
+      return cart.some(item => item.category_id === discount.target_category_id);
+    } else if (discount.applicable_to === 'Product') {
+      // Only applicable if cart contains target product
+      return cart.some(item => item.id === discount.target_product_id);
+    }
+    return false;
+  };
+
+  const calculateDiscountAmount = (discount: AvailableDiscount, subtotal: number): number => {
+    const value = toNumber(discount.value);
+
+    if (discount.discount_type === 'Percentage') {
+      // Percentage: apply to subtotal
+      return (subtotal * value) / 100;
+    } else {
+      // FixedAmount: return fixed value (capped at subtotal)
+      return Math.min(value, subtotal);
+    }
+  };
+
+  // --- Update discount when selection changes or cart changes ---
+  useEffect(() => {
+    if (!selectedDiscount || cart.length === 0) {
+      setCalculatedDiscountAmount(0);
+      return;
+    }
+
+    // Check if discount still applies
+    if (!isDiscountApplicable(selectedDiscount)) {
+      console.warn(`[Discount] Selected discount no longer applies with current cart`);
+      setSelectedDiscount(null);
+      setCalculatedDiscountAmount(0);
+      showToast(`Discount "${selectedDiscount.name}" no longer applies`, 'close');
+      return;
+    }
+
+    // Recalculate discount amount based on current subtotal
+    const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
+    const newDiscountAmount = calculateDiscountAmount(selectedDiscount, subtotal);
+    setCalculatedDiscountAmount(newDiscountAmount);
+  }, [selectedDiscount, cart]);
+
+  // --- Handle discount selection with validation ---
+  const handleSelectDiscount = (discount: AvailableDiscount | null) => {
+    console.log('[Discount Selected]', discount);
+
+    if (!discount) {
+      setSelectedDiscount(null);
+      setCalculatedDiscountAmount(0);
+      return;
+    }
+
+    // Validate if discount applies to current cart
+    if (!isDiscountApplicable(discount)) {
+      showToast(
+        `Discount "${discount.name}" is not applicable to items in your cart`,
+        'close'
+      );
+      return;
+    }
+
+    setSelectedDiscount(discount);
+  };
 
   const addToCart = (product: Product) => {
     const existingItem = cart.find(item => item.id === product.id);
@@ -200,37 +403,53 @@ export function BillingScreen() {
     setCart(cart.filter(item => item.id !== id));
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) return;
 
     // --- Build API Payload (matches Django sales + sale_items schema) ---
     const payload = {
-      bill_number: currentBillNumber,
       payment_method: paymentMethod,
       items: cart.map(item => ({
         product_id: item.id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,      // Frozen price — captured when product was added to cart
-        subtotal: item.subtotal,           // quantity * unit_price (pre-calculated)
+        quantity: String(item.quantity),  // Backend expects quantity as string
+        unit_price: String(item.unit_price),
+        subtotal: String(item.subtotal),
       })),
     };
 
-    // --- TODO: Replace with actual API call ---
-    // await fetch('/api/sales/', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    //   body: JSON.stringify(payload),
-    // });
+    try {
+      console.log('[Checkout Payload]', JSON.stringify(payload, null, 2));
+      
+      // --- Make API call to save sale to backend ---
+      const response = await apiClient.sales.create(payload as any);
+      
+      console.log('[Sale Created Successfully]', response);
+      showToast(`Bill ${currentBillNumber} saved successfully!`, 'success');
 
-    console.log('[Checkout Payload]', JSON.stringify(payload, null, 2));
-    showToast(`Bill ${currentBillNumber} saved successfully!`, 'success');
+      // Save current bill as "previous bill" for display
+      const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
+      const total = subtotal - calculatedDiscountAmount;
+      setPreviousBill({
+        bill_number: currentBillNumber,
+        items: cart,
+        subtotal: subtotal,
+        discount: calculatedDiscountAmount,
+        total: total,
+        created_at: new Date().toISOString(),
+      });
 
-    // Reset for next bill
-    setCart([]);
-    setDiscountAmount(0);
-    setPaymentMethod('Cash');
-    billCounter.current += 1;
-    setCurrentBillNumber(generateBillNumber(billCounter.current));
+      // Reset for next bill
+      setCart([]);
+      setSelectedDiscount(null);
+      setCalculatedDiscountAmount(0);
+      setPaymentMethod('Cash');
+      billCounter.current += 1;
+      setCurrentBillNumber(generateBillNumber(billCounter.current));
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to save bill';
+      console.error('[Checkout Error]', error);
+      showToast(`Error saving bill: ${errorMsg}`, 'error');
+    }
   };
 
   const filteredProducts = products.filter(product => {
@@ -260,6 +479,267 @@ export function BillingScreen() {
     }
   };
 
+  // Generate PDF from previous bill and open in new tab
+  const generateAndOpenPDF = async () => {
+    if (!previousBill || !printableRef.current) return;
+
+    try {
+      // Create a new window to render the bill without Tailwind styles causing issues
+      const printWindow = window.open('', '', 'height=800,width=600');
+      if (!printWindow) {
+        throw new Error('Failed to open window for PDF generation');
+      }
+
+      // Build the receipt HTML without Tailwind classes
+      const receiptHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: monospace;
+              line-height: 1.6;
+              background: white;
+              color: black;
+              padding: 20px;
+            }
+            .bill-header {
+              text-align: center;
+              margin-bottom: 20px;
+              border-bottom: 1px solid #ddd;
+              padding-bottom: 10px;
+            }
+            .bill-header h2 {
+              margin: 0;
+              font-size: 18px;
+              font-weight: bold;
+            }
+            .bill-header p {
+              margin: 5px 0;
+              font-size: 12px;
+            }
+            .bill-meta {
+              margin-bottom: 15px;
+              font-size: 12px;
+            }
+            .bill-meta-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 5px;
+            }
+            .divider {
+              border-top: 1px solid #ddd;
+              margin: 15px 0;
+            }
+            table {
+              width: 100%;
+              margin-bottom: 15px;
+              font-size: 12px;
+              border-collapse: collapse;
+            }
+            thead {
+              border-bottom: 1px solid #ddd;
+            }
+            th {
+              text-align: left;
+              padding-bottom: 5px;
+              font-weight: bold;
+            }
+            td {
+              padding: 5px 0;
+              border-bottom: 1px solid #eee;
+            }
+            .qty-col {
+              text-align: center;
+            }
+            .price-col {
+              text-align: right;
+            }
+            .total-col {
+              text-align: right;
+            }
+            .bill-totals {
+              font-size: 12px;
+              margin-bottom: 15px;
+            }
+            .total-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 5px;
+            }
+            .discount-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 5px;
+              color: #28a745;
+            }
+            .final-total {
+              display: flex;
+              justify-content: space-between;
+              margin-top: 10px;
+              padding-top: 10px;
+              border-top: 1px solid #ddd;
+              font-weight: bold;
+              font-size: 14px;
+            }
+            .bill-footer {
+              text-align: center;
+              margin-top: 20px;
+              font-size: 11px;
+              border-top: 1px solid #ddd;
+              padding-top: 10px;
+            }
+            .bill-footer p {
+              margin: 5px 0;
+              color: #666;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="bill-header">
+            <h2>BakeryOS</h2>
+            <p>Manager Portal - Receipt</p>
+          </div>
+
+          <div class="bill-meta">
+            <div class="bill-meta-row">
+              <span>Bill Number:</span>
+              <span style="font-weight: bold;">${previousBill.bill_number}</span>
+            </div>
+            <div class="bill-meta-row">
+              <span>Date:</span>
+              <span>${previousBill.created_at ? new Date(previousBill.created_at).toLocaleString() : 'N/A'}</span>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="qty-col">Qty</th>
+                <th class="price-col">Price</th>
+                <th class="total-col">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${previousBill.items.map((item) => `
+                <tr>
+                  <td>${item.name}</td>
+                  <td class="qty-col">${item.quantity}</td>
+                  <td class="price-col">Rs. ${item.unit_price.toLocaleString()}</td>
+                  <td class="total-col">Rs. ${item.subtotal.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="divider"></div>
+
+          <div class="bill-totals">
+            <div class="total-row">
+              <span>Subtotal:</span>
+              <span>Rs. ${previousBill.subtotal.toLocaleString()}</span>
+            </div>
+            ${previousBill.discount > 0 ? `
+              <div class="discount-row">
+                <span>Discount:</span>
+                <span>-Rs. ${previousBill.discount.toLocaleString()}</span>
+              </div>
+            ` : ''}
+            <div class="final-total">
+              <span>Total:</span>
+              <span>Rs. ${previousBill.total.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div class="bill-footer">
+            <p>Thank you for your purchase!</p>
+            <p>Printed: ${new Date().toLocaleString()}</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Write the HTML to the new window
+      printWindow.document.write(receiptHTML);
+      printWindow.document.close();
+
+      // Wait a moment for the content to render, then convert to canvas and PDF
+      setTimeout(() => {
+        html2canvas(printWindow.document.body, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          allowTaint: true,
+        })
+          .then((canvas) => {
+            // Create PDF
+            const pdf = new jsPDF({
+              orientation: 'portrait',
+              unit: 'mm',
+              format: 'a4',
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 210;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+            // Open PDF in new tab
+            const pdfBlob = pdf.output('blob');
+            const pdfUrl = URL.createObjectURL(pdfBlob);
+            window.open(pdfUrl, '_blank');
+
+            // Close the temporary window
+            printWindow.close();
+
+            showToast('PDF opened successfully!', 'success');
+            console.log('[PDF Generated]', { bill_number: previousBill.bill_number });
+          })
+          .catch((error) => {
+            console.error('Error converting to canvas:', error);
+            printWindow.close();
+            showToast('Failed to generate PDF', 'error');
+          });
+      }, 500);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showToast('Failed to generate PDF', 'error');
+    }
+  };
+
+  // Trigger browser print dialog for testing
+  const triggerPrint = () => {
+    if (!previousBill || !printableRef.current) return;
+
+    try {
+      // Temporarily show the printable element
+      const originalDisplay = printableRef.current.style.display;
+      printableRef.current.style.display = 'block';
+
+      // Open browser print dialog
+      window.print();
+
+      // Restore original display (if needed)
+      printableRef.current.style.display = originalDisplay;
+
+      console.log('[Print Dialog Opened]', { bill_number: previousBill.bill_number });
+    } catch (error) {
+      console.error('Error opening print dialog:', error);
+      showToast('Failed to open print dialog', 'error');
+    }
+  };
+
   return (
     <>
       {/* Toast Notification - Fixed Position adjusted to top-24 to clear Navbar */}
@@ -272,11 +752,13 @@ export function BillingScreen() {
           className={`px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 font-bold border-l-4 backdrop-blur-sm ${
             toast.type === 'success'
               ? 'bg-green-100 text-green-800 border-green-600'
+              : toast.type === 'error'
+              ? 'bg-red-100 text-red-800 border-red-600'
               : 'bg-gray-800 text-white border-gray-500'
           }`}
           style={{ minWidth: '300px', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' }}
         >
-          <span className="text-2xl">{toast.type === 'success' ? '✅' : '🔒'}</span>
+          <span className="text-2xl">{toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : '🔒'}</span>
           <div>
             <h4 className="text-sm font-extrabold uppercase tracking-wider opacity-70">
               {toast.type === 'success' ? 'System Status' : 'Shift Status'}
@@ -368,19 +850,23 @@ export function BillingScreen() {
               </div>
               {/* Category Chips */}
               <div className="flex gap-2 flex-wrap">
-                {categories.map(category => (
-                  <Badge
-                    key={category}
-                    onClick={() => isCounterOpen && setSelectedCategory(category)}
-                    className={`cursor-pointer px-4 py-2 transition-colors ${
-                      selectedCategory === category
-                        ? 'bg-orange-600 text-white hover:bg-orange-700'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    } ${!isCounterOpen ? 'pointer-events-none opacity-60' : ''}`}
-                  >
-                    {category}
-                  </Badge>
-                ))}
+                {categoriesLoading ? (
+                  <p className="text-gray-500 text-sm">Loading categories...</p>
+                ) : (
+                  categories.map(category => (
+                    <Badge
+                      key={category.id}
+                      onClick={() => isCounterOpen && setSelectedCategory(category.name)}
+                      className={`cursor-pointer px-4 py-2 transition-colors ${
+                        selectedCategory === category.name
+                          ? 'bg-orange-600 text-white hover:bg-orange-700'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      } ${!isCounterOpen ? 'pointer-events-none opacity-60' : ''}`}
+                    >
+                      {category.name}
+                    </Badge>
+                  ))
+                )}
               </div>
             </div>
             {/* Product Table */}
@@ -453,27 +939,33 @@ export function BillingScreen() {
                   <h4 className="text-gray-800 mb-3">Previous Bill Summary</h4>
                   {/* Bill Details */}
                   <div className="space-y-2 mb-4">
-                    <p className="text-sm text-gray-700">
-                      <span className="text-orange-700">Bill #107</span> • Fish Bun (x2), Tea Bun (x1)
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <span className="tabular-nums">Total: Rs. 220</span> | <span className="tabular-nums">Discount: Rs. 0</span>
-                    </p>
+                    {previousBill ? (
+                      <>
+                        <p className="text-sm text-gray-700">
+                          <span className="text-orange-700">Bill #{previousBill.bill_number}</span> • {previousBill.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          <span className="tabular-nums">Total: Rs. {previousBill.total.toLocaleString()}</span> | <span className="tabular-nums">Discount: Rs. {previousBill.discount.toLocaleString()}</span>
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No previous bill yet</p>
+                    )}
                   </div>
                   {/* Action Buttons */}
                   <div className="flex gap-3">
                     <button
-                      onClick={() => alert('Opening PDF...')}
+                      onClick={generateAndOpenPDF}
                       className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center justify-center gap-2 transition-colors"
-                      disabled={!isCounterOpen}
+                      disabled={!isCounterOpen || !previousBill}
                     >
                       <FileText className="w-4 h-4" />
                       <span className="text-sm">Open PDF</span>
                     </button>
                     <button
-                      onClick={() => alert('Reprinting bill...')}
+                      onClick={triggerPrint}
                       className="flex-1 px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg flex items-center justify-center gap-2 transition-colors"
-                      disabled={!isCounterOpen}
+                      disabled={!isCounterOpen || !previousBill}
                     >
                       <Printer className="w-4 h-4" />
                       <span className="text-sm">Reprint</span>
@@ -494,12 +986,119 @@ export function BillingScreen() {
               isCounterOpen={isCounterOpen}
               paymentMethod={paymentMethod}
               onPaymentMethodChange={setPaymentMethod}
-              discountAmount={discountAmount}
-              onDiscountChange={setDiscountAmount}
+              availableDiscounts={availableDiscounts}
+              selectedDiscount={selectedDiscount}
+              onSelectDiscount={handleSelectDiscount}
+              calculatedDiscountAmount={calculatedDiscountAmount}
+              discountsLoading={discountsLoading}
             />
           </div>
         </div>
       </div>
+
+      {/* Hidden Printable Bill Component - for PDF generation and print dialog */}
+      {previousBill && (
+        <div
+          ref={printableRef}
+          style={{ display: 'none' }}
+          className="printable-bill"
+        >
+          <div style={{ padding: '20px', fontFamily: 'monospace', lineHeight: '1.6', backgroundColor: 'white', color: 'black' }}>
+            {/* Header */}
+            <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
+              <h2 style={{ margin: '0', fontSize: '18px', fontWeight: 'bold' }}>BakeryOS</h2>
+              <p style={{ margin: '5px 0', fontSize: '12px' }}>Manager Portal - Receipt</p>
+            </div>
+
+            {/* Bill Number & Date */}
+            <div style={{ marginBottom: '15px', fontSize: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                <span>Bill Number:</span>
+                <span style={{ fontWeight: 'bold' }}>{previousBill.bill_number}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Date:</span>
+                <span>{previousBill.created_at ? new Date(previousBill.created_at).toLocaleString() : 'N/A'}</span>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid #ddd', marginBottom: '15px' }}></div>
+
+            {/* Items Table */}
+            <table style={{ width: '100%', marginBottom: '15px', fontSize: '12px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #ddd' }}>
+                  <th style={{ textAlign: 'left', paddingBottom: '5px', fontWeight: 'bold' }}>Item</th>
+                  <th style={{ textAlign: 'center', paddingBottom: '5px', fontWeight: 'bold' }}>Qty</th>
+                  <th style={{ textAlign: 'right', paddingBottom: '5px', fontWeight: 'bold' }}>Price</th>
+                  <th style={{ textAlign: 'right', paddingBottom: '5px', fontWeight: 'bold' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previousBill.items.map((item, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ paddingTop: '5px', paddingBottom: '5px' }}>{item.name}</td>
+                    <td style={{ textAlign: 'center', paddingTop: '5px', paddingBottom: '5px' }}>{item.quantity}</td>
+                    <td style={{ textAlign: 'right', paddingTop: '5px', paddingBottom: '5px' }}>Rs. {item.unit_price.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', paddingTop: '5px', paddingBottom: '5px' }}>Rs. {item.subtotal.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid #ddd', marginBottom: '10px' }}></div>
+
+            {/* Totals */}
+            <div style={{ fontSize: '12px', marginBottom: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                <span>Subtotal:</span>
+                <span>Rs. {previousBill.subtotal.toLocaleString()}</span>
+              </div>
+              {previousBill.discount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', color: '#28a745' }}>
+                  <span>Discount:</span>
+                  <span>-Rs. {previousBill.discount.toLocaleString()}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #ddd', fontWeight: 'bold', fontSize: '14px' }}>
+                <span>Total:</span>
+                <span>Rs. {previousBill.total.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '11px', borderTop: '1px solid #ddd', paddingTop: '10px' }}>
+              <p style={{ margin: '5px 0' }}>Thank you for your purchase!</p>
+              <p style={{ margin: '5px 0', color: '#666' }}>Printed: {new Date().toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print Stylesheet */}
+      <style>{`
+        @media print {
+          body {
+            margin: 0;
+            padding: 0;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .printable-bill {
+            display: block !important;
+            padding: 0;
+            margin: 0;
+          }
+          .printable-bill * {
+            visibility: visible;
+          }
+        }
+      `}</style>
     </>
   );
 }

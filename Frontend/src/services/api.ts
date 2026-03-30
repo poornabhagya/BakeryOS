@@ -1,8 +1,9 @@
-import { ApiProduct, ApiSale, ApiUser } from '../utils/apiTypes';
+import { ApiProduct, ApiSale, ApiUser, ApiSaleDetail } from '../utils/apiTypes';
 import {
   convertApiProductToUi,
   convertApiUserToUi,
   convertApiSaleToUi,
+  convertApiSaleDetailToUi,
 } from '../utils/conversions';
 
 // ============================================================
@@ -219,11 +220,32 @@ async function makeRequest<T>(
     );
   }
 
-  // Success path - parse JSON
-  console.log(`[API] ✅ Response successful (${response.status}), parsing JSON...`);
-  const data = await response.json() as T;
-  console.log(`[API] ✅ JSON parsed successfully for ${endpoint}`);
-  return data;
+  // Success path - handle response based on status code
+  console.log(`[API] ✅ Response successful (${response.status})`);
+  
+  // Handle 204 No Content and other responses with no body
+  if (response.status === 204 || response.status === 201 || response.status === 202) {
+    // These status codes may have no response body
+    // Check if there's actually content to parse
+    const contentLength = response.headers.get('content-length');
+    const contentType = response.headers.get('content-type');
+    
+    if (response.status === 204 || contentLength === '0' || !contentType?.includes('application/json')) {
+      console.log(`[API] ✅ Response ${response.status} with no JSON body - returning null`);
+      return null as unknown as T;
+    }
+  }
+  
+  // Parse JSON for responses that have a body
+  try {
+    const data = await response.json() as T;
+    console.log(`[API] ✅ JSON parsed successfully for ${endpoint}`);
+    return data;
+  } catch (error) {
+    // If JSON parsing fails on a success response, return null
+    console.warn(`[API] ⚠ Failed to parse JSON from successful response (${response.status})`, error);
+    return null as unknown as T;
+  }
 }
 
 // ============================================================
@@ -322,6 +344,44 @@ export const productApi = {
     };
   },
 
+  getAllPages: async (search?: string) => {
+    /**
+     * Fetch ALL pages automatically and merge them into a single array.
+     * Perfect for manageable datasets (< 500 items).
+     * Use this instead of getAll() when you need complete inventory.
+     */
+    let allItems: ApiProduct[] = [];
+    let page = 1;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      let endpoint = `/products/?page=${page}`;
+      if (search) endpoint += `&search=${encodeURIComponent(search)}`;
+
+      const response = await makeRequest<PaginatedResponse<ApiProduct> | ApiProduct[]>(
+        endpoint
+      );
+
+      // Handle both flat array and paginated response
+      const items = Array.isArray(response) ? response : response.results;
+      allItems = [...allItems, ...items];
+
+      // Check if there's a next page
+      if (Array.isArray(response)) {
+        hasNextPage = false;
+      } else {
+        hasNextPage = !!response.next;
+      }
+
+      page++;
+    }
+
+    return {
+      items: allItems.map(convertApiProductToUi),
+      total: allItems.length,
+    };
+  },
+
   getById: async (id: number) => {
     const response = await makeRequest<ApiProduct>(`/products/${id}/`);
     return convertApiProductToUi(response);
@@ -386,9 +446,37 @@ export const saleApi = {
     };
   },
 
+  getLatest: async () => {
+    // Get the first page (most recent sale should be first based on backend ordering)
+    const response = await makeRequest<PaginatedResponse<ApiSale>>('/sales/?page=1&page_size=1');
+    
+    if (response.results && response.results.length > 0) {
+      return convertApiSaleToUi(response.results[0]);
+    }
+    return null;
+  },
+
+  getLatestWithItems: async () => {
+    // First get the latest sale ID
+    const latestSale = await saleApi.getLatest();
+    if (!latestSale) {
+      return null;
+    }
+    
+    // Then fetch full details with items
+    const response = await makeRequest<ApiSaleDetail>(`/sales/${latestSale.id}/`);
+    return convertApiSaleDetailToUi(response);
+  },
+
   getById: async (id: number) => {
     const response = await makeRequest<ApiSale>(`/sales/${id}/`);
     return convertApiSaleToUi(response);
+  },
+
+  getSale: async (id: number) => {
+    // Fetch detailed sale with nested items (using SaleDetailSerializer on backend)
+    const response = await makeRequest<ApiSaleDetail>(`/sales/${id}/`);
+    return convertApiSaleDetailToUi(response);
   },
 
   create: async (data: {
@@ -406,6 +494,14 @@ export const saleApi = {
 
   delete: async (id: number) => {
     await makeRequest(`/sales/${id}/`, { method: 'DELETE' });
+  },
+
+  getNextBillNumber: async () => {
+    const response = await makeRequest<{
+      next_bill_number: string;
+      next_number: number;
+    }>('/sales/next-bill-number/');
+    return response;
   },
 };
 
@@ -468,15 +564,52 @@ export const categoryApi = {
     return response.results;
   },
 
-  create: async (name: string) => {
-    const response = await makeRequest<{ id: number; name: string }>(
+  getProducts: async () => {
+    const response = await makeRequest<
+      Array<{ id: number; name: string; type: string }>
+    >('/categories/products/');
+
+    return response;
+  },
+
+  getIngredients: async () => {
+    const response = await makeRequest<
+      Array<{ id: number; name: string; type: string }>
+    >('/categories/ingredients/');
+
+    return response;
+  },
+
+  create: async (data: { 
+    name: string; 
+    type: 'Product' | 'Ingredient'; 
+    description?: string | null; 
+    low_stock_alert?: number | null;
+  }) => {
+    const response = await makeRequest<{ id: number; category_id: string; name: string; type: string }>(
       '/categories/',
       {
         method: 'POST',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(data),
       }
     );
 
+    return response;
+  },
+
+  update: async (id: number, data: { 
+    name: string; 
+    type?: 'Product' | 'Ingredient'; 
+    description?: string | null; 
+    low_stock_alert?: number | null;
+  }) => {
+    const response = await makeRequest<{ id: number; category_id: string; name: string; type: string }>(
+      `/categories/${id}/`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }
+    );
     return response;
   },
 
@@ -508,6 +641,26 @@ export const discountApi = {
     };
   },
 
+  getActive: async () => {
+    const response = await makeRequest<{
+      count: number;
+      results: Array<{
+        id: number;
+        name: string;
+        discount_id: string;
+        discount_type: 'Percentage' | 'FixedAmount';
+        value: string | number;
+        applicable_to: 'All' | 'Category' | 'Product';
+        target_category_id?: number;
+        target_product_id?: number;
+        is_active: boolean;
+      }>;
+      current_datetime: string;
+    }>('/discounts/active/');
+
+    return response.results || [];
+  },
+
   create: async (data: {
     name: string;
     percentage?: string;
@@ -532,6 +685,95 @@ export const discountApi = {
 
   delete: async (id: number) => {
     await makeRequest(`/discounts/${id}/`, { method: 'DELETE' });
+  },
+};
+
+// ============================================================
+// API Endpoints - Ingredients
+// ============================================================
+
+export const ingredientApi = {
+  getAll: async (page: number = 1, search?: string) => {
+    let endpoint = `/ingredients/?page=${page}`;
+    if (search) endpoint += `&search=${encodeURIComponent(search)}`;
+
+    const response = await makeRequest<PaginatedResponse<any> | any[]>(
+      endpoint
+    );
+
+    // Handle both flat array and paginated response
+    const items = Array.isArray(response) ? response : response.results;
+    const total = Array.isArray(response) ? response.length : response.count;
+
+    return {
+      items: items,
+      total: total,
+      nextPage: Array.isArray(response) ? null : response.next,
+      previousPage: Array.isArray(response) ? null : response.previous,
+    };
+  },
+
+  getAllPages: async (search?: string) => {
+    /**
+     * Fetch ALL pages automatically and merge them into a single array.
+     * Perfect for manageable datasets (< 500 items).
+     * Use this instead of getAll() when you need complete inventory.
+     */
+    let allItems: any[] = [];
+    let page = 1;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      let endpoint = `/ingredients/?page=${page}`;
+      if (search) endpoint += `&search=${encodeURIComponent(search)}`;
+
+      const response = await makeRequest<PaginatedResponse<any> | any[]>(
+        endpoint
+      );
+
+      // Handle both flat array and paginated response
+      const items = Array.isArray(response) ? response : response.results;
+      allItems = [...allItems, ...items];
+
+      // Check if there's a next page
+      if (Array.isArray(response)) {
+        hasNextPage = false;
+      } else {
+        hasNextPage = !!response.next;
+      }
+
+      page++;
+    }
+
+    return {
+      items: allItems,
+      total: allItems.length,
+    };
+  },
+
+  getById: async (id: number) => {
+    const response = await makeRequest<any>(`/ingredients/${id}/`);
+    return response;
+  },
+
+  create: async (data: any) => {
+    const response = await makeRequest<any>('/ingredients/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
+
+  update: async (id: number, data: any) => {
+    const response = await makeRequest<any>(`/ingredients/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
+
+  delete: async (id: number) => {
+    await makeRequest(`/ingredients/${id}/`, { method: 'DELETE' });
   },
 };
 
@@ -701,8 +943,7 @@ const apiClient = {
   sales: saleApi,
   users: userApi,
   categories: categoryApi,
-  discounts: discountApi,
-  inventory: inventoryApi,
+  discounts: discountApi,  ingredients: ingredientApi,  inventory: inventoryApi,
   wastage: wastageApi,
   notifications: notificationApi,
   batches: batchApi,

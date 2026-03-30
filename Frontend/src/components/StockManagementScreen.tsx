@@ -9,7 +9,7 @@ import DeleteConfirmationModal from './modal/DeleteConfirmationModal';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { CategoryListModal } from './modal/CategoryListModal';
-import { AddProductCategoryModal } from './AddProductCategoryModal';
+import { AddProductCategoryModal } from './modal/AddProductCategoryModal';
 import { AddItemModal } from './modal/AddItemModal';
 import { AddIngredientItemModal } from './modal/ingredient modal/AddIngredientItemModal';
 import { EditProductItemModal } from './modal/EditProductItemModal';
@@ -22,7 +22,8 @@ import { IngredientCategoryListModal } from './modal/ingredient modal/Ingredient
 
 // --- 1. Types & Mock Data ---
 type Product = {
-  id: string;
+  id: string;  // product_id like "#PROD-1042"
+  apiId: number;  // numeric database ID for API calls
   name: string;
   category_name: string;
   selling_price: number;
@@ -31,12 +32,12 @@ type Product = {
 };
 
 const initialProducts: Product[] = [
-  { id: "#P001", name: "Fish Bun", category_name: "Buns", selling_price: 80, cost_price: 45, current_stock: 8 },
-  { id: "#P002", name: "Tea Bun", category_name: "Buns", selling_price: 60, cost_price: 30, current_stock: 25 },
-  { id: "#C001", name: "Butter Cake", category_name: "Cakes", selling_price: 450, cost_price: 200, current_stock: 5 },
-  { id: "#B001", name: "Sandwich Bread", category_name: "Bread", selling_price: 190, cost_price: 110, current_stock: 40 },
-  { id: "#D001", name: "Iced Coffee", category_name: "Drinks", selling_price: 150, cost_price: 80, current_stock: 12 },
-  { id: "#P003", name: "Chicken Roll", category_name: "Pastry", selling_price: 120, cost_price: 60, current_stock: 0 },
+  { id: "#P001", apiId: 1, name: "Fish Bun", category_name: "Buns", selling_price: 80, cost_price: 45, current_stock: 8 },
+  { id: "#P002", apiId: 2, name: "Tea Bun", category_name: "Buns", selling_price: 60, cost_price: 30, current_stock: 25 },
+  { id: "#C001", apiId: 3, name: "Butter Cake", category_name: "Cakes", selling_price: 450, cost_price: 200, current_stock: 5 },
+  { id: "#B001", apiId: 4, name: "Sandwich Bread", category_name: "Bread", selling_price: 190, cost_price: 110, current_stock: 40 },
+  { id: "#D001", apiId: 5, name: "Iced Coffee", category_name: "Drinks", selling_price: 150, cost_price: 80, current_stock: 12 },
+  { id: "#P003", apiId: 6, name: "Chicken Roll", category_name: "Pastry", selling_price: 120, cost_price: 60, current_stock: 0 },
 ];
 
 // --- Ingredients Type & Mock Data ---
@@ -77,21 +78,73 @@ const StockManagementScreen: React.FC = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(true);
 
-  // --- Fetch Products from API ---
+  // Handlers for refreshing data after adding items
+  const handleProductAdded = async () => {
+    try {
+      const response = await apiClient.products.getAllPages();
+      const uiProducts = response.items.map((uiProduct: any) => ({
+        id: uiProduct.product_id,
+        apiId: uiProduct.id,  // Store numeric ID for API operations
+        name: uiProduct.name,
+        category_name: uiProduct.category_name,
+        selling_price: uiProduct.selling_price,
+        cost_price: uiProduct.cost_price,
+        current_stock: uiProduct.current_stock,
+        shelf_life: uiProduct.shelf_life,
+        shelf_unit: uiProduct.shelf_unit,
+        is_active: uiProduct.is_active,
+        recipe_items: uiProduct.recipe_items,
+      }));
+      setProducts(uiProducts);
+      console.log('[StockManagementScreen] Products refreshed after new item added');
+    } catch (error) {
+      console.error('[StockManagementScreen] Error refreshing products:', error);
+    }
+  };
+
+  const handleIngredientAdded = async () => {
+    try {
+      const response = await apiClient.ingredients.getAllPages();
+      const uiIngredients = response.items.map((apiIngredient: any) => ({
+        id: apiIngredient.ingredient_id || apiIngredient.id,
+        name: apiIngredient.name,
+        category: apiIngredient.category_name,
+        supplier: apiIngredient.supplier || 'N/A',
+        quantity: apiIngredient.total_quantity,
+        unit: apiIngredient.base_unit,
+        trackingType: apiIngredient.tracking_type,
+        lowStockValue: apiIngredient.low_stock_threshold,
+        supplierContact: apiIngredient.supplier_contact || 'N/A',
+        is_active: apiIngredient.is_active,
+      }));
+      setIngredients(uiIngredients);
+      console.log('[StockManagementScreen] Ingredients refreshed after new item added');
+    } catch (error) {
+      console.error('[StockManagementScreen] Error refreshing ingredients:', error);
+    }
+  };
+
+  // --- Fetch Products from API (All Pages) ---
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setIsFetching(true);
         setFetchError(null);
-        const response = await apiClient.products.getAll();
+        // Use getAllPages() to fetch all products across all pages
+        const response = await apiClient.products.getAllPages();
         // response.items already contains UI-formatted products
         const uiProducts = response.items.map((uiProduct: any) => ({
-          id: uiProduct.id,
+          id: uiProduct.product_id,
+          apiId: uiProduct.id,  // Store numeric ID for API operations
           name: uiProduct.name,
           category_name: uiProduct.category_name,
           selling_price: uiProduct.selling_price,
           cost_price: uiProduct.cost_price,
           current_stock: uiProduct.current_stock,
+          shelf_life: uiProduct.shelf_life,
+          shelf_unit: uiProduct.shelf_unit,
+          is_active: uiProduct.is_active,
+          recipe_items: uiProduct.recipe_items,
         }));
         setProducts(uiProducts);
       } catch (error) {
@@ -108,6 +161,36 @@ const StockManagementScreen: React.FC = () => {
     fetchProducts();
   }, []);
 
+  // --- Fetch Ingredients from API (All Pages) ---
+  useEffect(() => {
+    const fetchIngredients = async () => {
+      try {
+        // Use getAllPages() to fetch all ingredients across all pages
+        const response = await apiClient.ingredients.getAllPages();
+        // Map backend API response to UI Ingredient type
+        const uiIngredients = response.items.map((apiIngredient: any) => ({
+          id: apiIngredient.id,  // Use numeric 'id', NOT 'ingredient_id' (which is the string like "#I013")
+          name: apiIngredient.name,
+          category: apiIngredient.category_name,
+          supplier: apiIngredient.supplier || 'N/A',
+          quantity: apiIngredient.total_quantity,
+          unit: apiIngredient.base_unit,
+          trackingType: apiIngredient.tracking_type,
+          lowStockValue: apiIngredient.low_stock_threshold,
+          supplierContact: apiIngredient.supplier_contact || 'N/A',
+          is_active: apiIngredient.is_active,
+        }));
+        setIngredients(uiIngredients);
+      } catch (error) {
+        console.error('Error fetching ingredients:', error);
+        // Fall back to initial mock data
+        setIngredients(initialIngredients);
+      }
+    };
+
+    fetchIngredients();
+  }, []);
+
   // Logic: Storekeeper ආපු ගමන් Tab එක මාරු කරනවා Ingredients වලට
   useEffect(() => {
     if (isStorekeeper) {
@@ -122,12 +205,84 @@ const StockManagementScreen: React.FC = () => {
   const [category, setCategory] = useState("All Categories");
   const [sortBy, setSortBy] = useState("Name A-Z");
   const [stockStatus, setStockStatus] = useState("All Items");
-  const [supplier, setSupplier] = useState("All Suppliers");
   const [isLoading, setIsLoading] = useState(false);
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isCategoryListModalOpen, setIsCategoryListModalOpen] = useState(false);
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
   const [isAddIngredientCategoryModalOpen, setIsAddIngredientCategoryModalOpen] = useState(false);
+
+  // Category States
+  const [productCategories, setProductCategories] = useState<{ id: number; name: string; type: string }[]>([]);
+  const [ingredientCategories, setIngredientCategories] = useState<{ id: number; name: string; type: string }[]>([]);
+
+  // Fetch Product Categories from API
+  useEffect(() => {
+    const fetchProductCategories = async () => {
+      try {
+        const response = await apiClient.categories.getProducts();
+        setProductCategories(response);
+      } catch (error) {
+        console.error('Error fetching product categories:', error);
+        // Fall back to default hardcoded categories
+        setProductCategories([
+          { id: 1, name: 'Buns', type: 'Product' },
+          { id: 2, name: 'Cakes', type: 'Product' },
+          { id: 3, name: 'Bread', type: 'Product' },
+          { id: 4, name: 'Drinks', type: 'Product' },
+          { id: 5, name: 'Pastry', type: 'Product' },
+        ]);
+      }
+    };
+    fetchProductCategories();
+  }, []);
+
+  // Fetch Ingredient Categories from API
+  useEffect(() => {
+    const fetchIngredientCategories = async () => {
+      try {
+        const response = await apiClient.categories.getIngredients();
+        setIngredientCategories(response);
+      } catch (error) {
+        console.error('Error fetching ingredient categories:', error);
+        // Fall back to default hardcoded categories
+        setIngredientCategories([
+          { id: 1, name: 'Flour', type: 'Ingredient' },
+          { id: 2, name: 'Dairy', type: 'Ingredient' },
+          { id: 3, name: 'Spices', type: 'Ingredient' },
+        ]);
+      }
+    };
+    fetchIngredientCategories();
+  }, []);
+
+  // Handle Category Added - Refresh the appropriate category list
+  const handleCategoryAdded = async () => {
+    try {
+      if (activeTab === 'Products') {
+        const response = await apiClient.categories.getProducts();
+        setProductCategories(response);
+      } else {
+        const response = await apiClient.categories.getIngredients();
+        setIngredientCategories(response);
+      }
+    } catch (error) {
+      console.error('Error refreshing categories after adding new category:', error);
+    }
+  };
+  
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
+  
+  // Reset pagination when switching tabs
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+  
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, category, sortBy, stockStatus]);
   const [stockHistoryModal, setStockHistoryModal] = useState<{ open: boolean, itemName?: string, itemId?: string }>({ open: false });
   const [viewItem, setViewItem] = useState<{
     id: string;
@@ -142,6 +297,7 @@ const StockManagementScreen: React.FC = () => {
   const [ingredientStockHistoryModal, setIngredientStockHistoryModal] = useState<{ open: boolean, ingredient: Ingredient | null }>({ open: false, ingredient: null });
   const [editProductModal, setEditProductModal] = useState<{ open: boolean, item: any | null }>({ open: false, item: null });
   const [deleteModal, setDeleteModal] = useState<{ open: boolean, item: Product | null }>({ open: false, item: null });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // --- 3. Logic: Reset & Refresh ---
   const resetFilters = () => {
@@ -149,7 +305,6 @@ const StockManagementScreen: React.FC = () => {
     setCategory("All Categories");
     setSortBy("Name A-Z");
     setStockStatus("All Items");
-    setSupplier("All Suppliers");
   };
 
   const handleRefresh = () => {
@@ -164,17 +319,20 @@ const StockManagementScreen: React.FC = () => {
   const filteredProducts = useMemo(() => {
     let list: any[] = activeTab === "Products" ? [...products] : [...ingredients];
 
+    // Filter out inactive items (soft-deleted)
+    list = list.filter((p) => p.is_active !== false);
+
     if (searchTerm.trim()) {
       const q = searchTerm.trim().toLowerCase();
-      list = list.filter((p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
+      list = list.filter((p) => p.name.toLowerCase().includes(q) || String(p.id).toLowerCase().includes(q));
     }
 
     if (category !== "All Categories") {
-      list = list.filter((p) => p.category_name === category);
-    }
-
-    if (activeTab === "Ingredients" && supplier !== "All Suppliers") {
-      list = list.filter((ing) => ing.supplier === supplier);
+      // Handle both products (category_name) and ingredients (category) properties
+      list = list.filter((item) => {
+        const itemCategory = item.category_name || item.category;
+        return itemCategory === category;
+      });
     }
 
     if (stockStatus === "Low Stock") list = list.filter((p) => p.current_stock > 0 && p.current_stock < 10);
@@ -186,7 +344,31 @@ const StockManagementScreen: React.FC = () => {
     else if (sortBy === "Stock High-Low") list.sort((a, b) => b.current_stock - a.current_stock);
 
     return list;
-  }, [products, ingredients, searchTerm, category, sortBy, stockStatus, supplier, activeTab]);
+  }, [products, ingredients, searchTerm, category, sortBy, stockStatus, activeTab]);
+
+  // --- Pagination Logic ---
+  const totalItems = filteredProducts.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+  
+  // Calculate display range for text indicator
+  const displayStart = totalItems === 0 ? 0 : startIndex + 1;
+  const displayEnd = Math.min(endIndex, totalItems);
+  
+  // Handle pagination
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+  
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
 
   const exportToPDF = async () => {
     const pdf = new jsPDF();
@@ -264,36 +446,15 @@ const StockManagementScreen: React.FC = () => {
           >
             <option>All Categories</option>
             {activeTab === "Products" ? (
-              <>
-                <option>Buns</option>
-                <option>Cakes</option>
-                <option>Bread</option>
-                <option>Drinks</option>
-                <option>Pastry</option>
-              </>
+              productCategories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))
             ) : (
-              <>
-                <option>Flour</option>
-                <option>Dairy</option>
-                <option>Spices</option>
-              </>
+              ingredientCategories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))
             )}
           </select>
-
-          {activeTab === "Ingredients" && (
-            <select
-              value={supplier}
-              onChange={(e) => setSupplier(e.target.value)}
-              className="px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-900 focus:outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer"
-            >
-              <option>All Suppliers</option>
-              <option>Local Mills</option>
-              <option>SweetSupplies</option>
-              <option>FarmFresh</option>
-              <option>DairyCo</option>
-              <option>SpiceHouse</option>
-            </select>
-          )}
 
           <select 
             value={sortBy}
@@ -316,7 +477,7 @@ const StockManagementScreen: React.FC = () => {
         </div>
 
         {/* Products Data Table */}
-        <div className="px-8 py-6 bg-white flex-1 overflow-auto">
+        <div className="px-8 py-6 bg-white flex flex-col flex-1 overflow-hidden">
           <div className="flex justify-end mb-4">
             <button
               onClick={handleRefresh}
@@ -328,7 +489,9 @@ const StockManagementScreen: React.FC = () => {
             </button>
           </div>
           
-            <div className="border border-orange-100 rounded-lg overflow-hidden stock-table">
+          {/* Scrollable Table Area */}
+          <div className="flex-1 overflow-y-auto bg-white border border-orange-100 rounded-lg">
+            <div className="stock-table">
             {isLoading ? (
               <div className="p-12 text-center text-orange-500">Loading Stock Data...</div>
             ) : (
@@ -354,24 +517,54 @@ const StockManagementScreen: React.FC = () => {
                 </tr>
                 </thead>
                 <tbody>
-                {filteredProducts.map((p: any) => (
-                  <tr key={p.id} className="border-b border-orange-100 hover:bg-[#FFF7F0] transition-colors">
-                  <td className="py-3 px-4 text-gray-600">{p.id}</td>
-                  <td className="py-3 px-4 font-medium text-gray-800">{p.name}</td>
-                  <td className="py-3 px-4 text-gray-600">{p.category_name}</td>
+                {paginatedProducts.map((p: any) => (
+                  <tr 
+                    key={p.id} 
+                    className={`border-b border-orange-100 transition-colors ${
+                      p.is_active === false 
+                        ? "bg-gray-50 opacity-60 hover:bg-gray-100" 
+                        : "hover:bg-[#FFF7F0]"
+                    }`}
+                  >
+                  <td className={`py-3 px-4 ${
+                    p.is_active === false ? "text-gray-400 line-through" : "text-gray-600"
+                  }`}>{p.id}</td>
+                  <td className={`py-3 px-4 font-medium ${
+                    p.is_active === false ? "text-gray-400" : "text-gray-800"
+                  }`}>
+                    {p.name}
+                    {p.is_active === false && (
+                      <span className="ml-2 px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded font-semibold">
+                        Inactive
+                      </span>
+                    )}
+                  </td>
+                  <td className={`py-3 px-4 ${
+                    p.is_active === false ? "text-gray-400" : "text-gray-600"
+                  }`}>{p.category_name || p.category || 'N/A'}</td>
                   {activeTab === "Products" ? (
                     <>
-                    <td className="py-3 px-4 font-medium text-gray-800">Rs. {p.selling_price}</td>
-                    <td className="py-3 px-4 text-gray-400">Rs. {p.cost_price}</td>
+                    <td className={`py-3 px-4 font-medium ${
+                      p.is_active === false ? "text-gray-400" : "text-gray-800"
+                    }`}>Rs. {p.selling_price}</td>
+                    <td className={`py-3 px-4 ${
+                      p.is_active === false ? "text-gray-400" : "text-gray-400"
+                    }`}>Rs. {p.cost_price}</td>
                     </>
                   ) : (
                     <>
-                    <td className="py-3 px-4 text-gray-600">{p.supplier}</td>
-                    <td className="py-3 px-4 text-gray-600">{p.trackingType ? p.trackingType : <span className='italic text-gray-400'>N/A</span>}</td>
+                    <td className={`py-3 px-4 ${
+                      p.is_active === false ? "text-gray-400" : "text-gray-600"
+                    }`}>{p.supplier}</td>
+                    <td className={`py-3 px-4 ${
+                      p.is_active === false ? "text-gray-400" : "text-gray-600"
+                    }`}>{p.trackingType ? p.trackingType : <span className='italic text-gray-400'>N/A</span>}</td>
                     </>
                   )}
                   <td className="py-3 px-4">
-                    {p.current_stock === 0 ? (
+                    {p.is_active === false ? (
+                      <span className="px-2 py-1 rounded bg-gray-200 text-gray-600 font-semibold text-xs">Inactive</span>
+                    ) : p.current_stock === 0 ? (
                       <span className="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold text-xs">Out of Stock</span>
                     ) : p.current_stock < 10 ? (
                       <span className="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold text-xs">{p.current_stock}{activeTab === "Ingredients" ? ` ${p.unit}` : ''}</span>
@@ -383,45 +576,56 @@ const StockManagementScreen: React.FC = () => {
                   {/* ACTIONS COLUMN - Role Based Access */}
                   <td className="py-3 px-4 flex gap-2">
                     
-                    {/* 1. View Button (හැමෝටම) */}
-                    <button
-                      title="View Details"
-                      className="p-2 rounded hover:bg-green-100 text-green-600"
-                      onClick={() => {
-                        if (activeTab === "Products") {
-                          setViewItem({
-                            id: p.id,
-                            name: p.name,
-                            selling_price: p.selling_price,
-                            cost_price: p.cost_price,
-                            shelfLife: "3 days",
-                            category_name: p.category_name,
-                          });
-                        } else {
-                          setIngredientDetailsModal({ open: true, item: p });
-                        }
-                      }}
-                    >
-                      <Eye className="w-[18px] h-[18px]" />
-                    </button>
+                    {/* Show "Inactive" message for inactive items */}
+                    {p.is_active === false && (
+                      <span className="text-xs text-gray-400 italic py-1">Inactive - Limited Actions</span>
+                    )}
+                    
+                    {/* 1. View Button (Always available, including for inactive) */}
+                    {p.is_active !== false && (
+                      <button
+                        title="View Details"
+                        className="p-2 rounded hover:bg-green-100 text-green-600"
+                        onClick={() => {
+                          if (activeTab === "Products") {
+                            setViewItem({
+                              id: p.id,
+                              name: p.name,
+                              selling_price: p.selling_price,
+                              cost_price: p.cost_price,
+                              shelf_life: p.shelf_life,
+                              shelf_unit: p.shelf_unit,
+                              category_name: p.category_name,
+                              recipe_items: p.recipe_items,
+                            });
+                          } else {
+                            setIngredientDetailsModal({ open: true, item: p });
+                          }
+                        }}
+                      >
+                        <Eye className="w-[18px] h-[18px]" />
+                      </button>
+                    )}
 
-                    {/* 2. History Button (හැමෝටම - Wastage දාන්න මේක ඕන නිසා) */}
-                    <button
-                      title="Stock History"
-                      className="p-2 rounded hover:bg-orange-100 text-orange-500"
-                      onClick={() => {
-                        if (activeTab === "Products") {
-                          setStockHistoryModal({ open: true, itemName: p.name, itemId: p.id });
-                        } else {
-                          setIngredientStockHistoryModal({ open: true, ingredient: p });
-                        }
-                      }}
-                    >
-                      <History className="w-[18px] h-[18px]" />
-                    </button>
+                    {/* 2. History Button (Only for active items) */}
+                    {p.is_active !== false && (
+                      <button
+                        title="Stock History"
+                        className="p-2 rounded hover:bg-orange-100 text-orange-500"
+                        onClick={() => {
+                          if (activeTab === "Products") {
+                            setStockHistoryModal({ open: true, itemName: p.name, itemId: p.id });
+                          } else {
+                            setIngredientStockHistoryModal({ open: true, ingredient: p });
+                          }
+                        }}
+                      >
+                        <History className="w-[18px] h-[18px]" />
+                      </button>
+                    )}
 
-                    {/* 3. PRODUCTS EDIT/DELETE: Only Manager OR Baker */}
-                    {activeTab === "Products" && (isManager || isBaker) && (
+                    {/* 3. PRODUCTS EDIT/DELETE: Only Manager OR Baker (Hide for inactive) */}
+                    {activeTab === "Products" && (isManager || isBaker) && p.is_active !== false && (
                       <>
                         <button
                           title="Edit"
@@ -447,13 +651,17 @@ const StockManagementScreen: React.FC = () => {
                       </>
                     )}
 
-                    {/* 4. INGREDIENTS EDIT/DELETE: Only Manager OR Storekeeper */}
-                    {activeTab === "Ingredients" && (isManager || isStorekeeper) && (
+                    {/* 4. INGREDIENTS EDIT/DELETE: Only Manager OR Storekeeper (Hide for inactive) */}
+                    {activeTab === "Ingredients" && (isManager || isStorekeeper) && p.is_active !== false && (
                       <>
                         <button title="Edit" className="p-2 rounded hover:bg-orange-100 text-orange-500">
                            <Edit className="w-[18px] h-[18px]" />
                         </button>
-                        <button title="Delete" className="p-2 rounded hover:bg-orange-100 text-red-500">
+                        <button 
+                          title="Delete" 
+                          className="p-2 rounded hover:bg-orange-100 text-red-500"
+                          onClick={() => setDeleteModal({ open: true, item: p })}
+                        >
                            <Trash2 className="w-[18px] h-[18px]" />
                         </button>
                       </>
@@ -462,12 +670,35 @@ const StockManagementScreen: React.FC = () => {
                     {/* Delete Confirmation Modal */}
                     <DeleteConfirmationModal
                       isOpen={deleteModal.open}
-                      onClose={() => setDeleteModal({ open: false, item: null })}
-                      onConfirm={() => {
+                      isLoading={isDeleting}
+                      onClose={() => !isDeleting && setDeleteModal({ open: false, item: null })}
+                      onConfirm={async () => {
                         if (deleteModal.item) {
-                          setProducts(products => products.filter(prod => prod.id !== deleteModal.item!.id));
+                          setIsDeleting(true);
+                          try {
+                            // Determine if deleting product or ingredient based on activeTab
+                            if (activeTab === "Products") {
+                              // Delete Product
+                              await apiClient.products.delete(deleteModal.item.apiId);
+                              // Remove from UI only if API call succeeds
+                              setProducts(products => products.filter(prod => prod.id !== deleteModal.item!.id));
+                              console.log(`[StockManagementScreen] Product ${deleteModal.item.name} deleted successfully`);
+                            } else {
+                              // Delete Ingredient - use the numeric id
+                              await apiClient.ingredients.delete(deleteModal.item.id);
+                              // Remove from UI only if API call succeeds
+                              setIngredients(ingredients => ingredients.filter(ing => ing.id !== deleteModal.item!.id));
+                              console.log(`[StockManagementScreen] Ingredient ${deleteModal.item.name} deleted successfully`);
+                            }
+                          } catch (error) {
+                            console.error('[StockManagementScreen] Error deleting item:', error);
+                            const itemType = activeTab === "Products" ? "product" : "ingredient";
+                            alert(`Failed to delete ${itemType}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                          } finally {
+                            setIsDeleting(false);
+                            setDeleteModal({ open: false, item: null });
+                          }
                         }
-                        setDeleteModal({ open: false, item: null });
                       }}
                       itemName={deleteModal.item?.name || ''}
                     />
@@ -478,9 +709,50 @@ const StockManagementScreen: React.FC = () => {
               </table>
             )}
             </div>
+          </div>
 
-          {/* Footer Buttons Logic */}
-          <div className="mt-6 flex justify-end items-center gap-3">
+          {/* Pagination Controls - Fixed Below Table */}
+          <div className="flex items-center justify-between bg-white px-6 py-4 border-t border-orange-100">
+            {/* Left: Showing X to Y of Z entries */}
+            <div className="text-sm text-gray-600 font-medium">
+              Showing {displayStart} to {displayEnd} of {totalItems} entries
+            </div>
+            
+            {/* Right: Previous and Next Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={goToPreviousPage}
+                disabled={currentPage === 1}
+                className={`px-4 py-2 rounded-lg border font-semibold transition-colors ${
+                  currentPage === 1
+                    ? "border-gray-300 text-gray-400 bg-gray-50 cursor-not-allowed"
+                    : "border-orange-300 text-orange-700 bg-white hover:bg-orange-50"
+                }`}
+              >
+                Previous
+              </button>
+              
+              <span className="px-3 py-2 text-sm font-medium text-gray-700">
+                Page {currentPage} of {totalPages}
+              </span>
+              
+              <button
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className={`px-4 py-2 rounded-lg border font-semibold transition-colors ${
+                  currentPage === totalPages || totalPages === 0
+                    ? "border-gray-300 text-gray-400 bg-gray-50 cursor-not-allowed"
+                    : "border-orange-300 text-orange-700 bg-white hover:bg-orange-50"
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Buttons Logic */}
+        <div className="px-8 pb-6 flex justify-end items-center gap-3">
             
             {/* View Categories - හැමෝටම පේනවා */}
             {activeTab === "Products" ? (
@@ -497,9 +769,10 @@ const StockManagementScreen: React.FC = () => {
             <IngredientCategoryListModal
               isOpen={isIngredientCategoryListModalOpen}
               onClose={() => setIsIngredientCategoryListModalOpen(false)}
+              categories={ingredientCategories}
+              onCategoriesRefresh={handleCategoryAdded}
             />
 
-            {/* ADD BUTTONS FOR PRODUCTS: Manager OR Baker Only */}
             {activeTab === "Products" && (isManager || isBaker) && (
               <>
                 <button
@@ -536,31 +809,45 @@ const StockManagementScreen: React.FC = () => {
                 </button>
               </>
             )}
-          </div>
-          
         </div>
       </div>
       
       {/* Modals are rendered here */}
-      <AddProductCategoryModal isOpen={isAddCategoryModalOpen} onClose={() => setIsAddCategoryModalOpen(false)} />
+      <AddProductCategoryModal 
+        isOpen={isAddCategoryModalOpen} 
+        onClose={() => setIsAddCategoryModalOpen(false)}
+        onCategoryAdded={handleCategoryAdded}
+      />
       <AddIngredientCategoryModal
         isOpen={isAddIngredientCategoryModalOpen}
         onClose={() => setIsAddIngredientCategoryModalOpen(false)}
-        onSave={(data) => {
-          setIsAddIngredientCategoryModalOpen(false);
-        }}
+        onCategoryAdded={handleCategoryAdded}
       />
-      <CategoryListModal isOpen={isCategoryListModalOpen} onClose={() => setIsCategoryListModalOpen(false)} />
+      <CategoryListModal 
+        isOpen={isCategoryListModalOpen} 
+        onClose={() => setIsCategoryListModalOpen(false)}
+        categories={productCategories}
+        onCategoriesRefresh={handleCategoryAdded}
+      />
       
       {activeTab === "Products" ? (
         <AddItemModal
           open={isAddItemModalOpen}
           onClose={() => setIsAddItemModalOpen(false)}
+          onItemAdded={handleProductAdded}
+          productCategories={productCategories}
+          ingredients={ingredients.map(ing => ({
+            id: Number(ing.id),  // Convert string or number ID to actual number
+            name: ing.name,
+            base_unit: ing.unit,
+          }))}
         />
       ) : (
         <AddIngredientItemModal
           open={isAddItemModalOpen}
           onClose={() => setIsAddItemModalOpen(false)}
+          onItemAdded={handleIngredientAdded}
+          ingredientCategories={ingredientCategories}
         />
       )}
       

@@ -214,7 +214,8 @@ class SaleItem(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.sale_id} - {self.product_id} x{self.quantity}"
+        product_name = self.product_id.name if self.product_id else "[Deleted Product]"
+        return f"{self.sale_id} - {product_name} x{self.quantity}"
     
     def save(self, *args, **kwargs):
         """Validate quantities and calculate subtotal"""

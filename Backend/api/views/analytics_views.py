@@ -114,8 +114,10 @@ class SalesAnalyticsViewSet(viewsets.ViewSet):
             
             for sale in daily_sales:
                 for sale_item in sale.items.all():
-                    product = sale_item.product_id
-                    cost_of_goods += (sale_item.quantity * product.cost_price)
+                    # Handle deleted products (product_id_id is None in DB)
+                    if sale_item.product_id_id:
+                        product = sale_item.product_id
+                        cost_of_goods += (sale_item.quantity * product.cost_price)
             
             profit = revenue - cost_of_goods
             profit_margin = (profit / revenue * 100) if revenue > 0 else Decimal('0')
@@ -172,8 +174,10 @@ class SalesAnalyticsViewSet(viewsets.ViewSet):
                 
                 for sale in week_sales:
                     for sale_item in sale.items.all():
-                        product = sale_item.product_id
-                        cost_of_goods += (sale_item.quantity * product.cost_price)
+                        # Handle deleted products (product_id_id is None in DB)
+                        if sale_item.product_id_id:
+                            product = sale_item.product_id
+                            cost_of_goods += (sale_item.quantity * product.cost_price)
                 
                 profit = revenue - cost_of_goods
                 profit_margin = (profit / revenue * 100) if revenue > 0 else Decimal('0')
@@ -228,8 +232,10 @@ class SalesAnalyticsViewSet(viewsets.ViewSet):
                 
                 for sale in month_sales:
                     for sale_item in sale.items.all():
-                        product = sale_item.product_id
-                        cost_of_goods += (sale_item.quantity * product.cost_price)
+                        # Handle deleted products (product_id_id is None in DB)
+                        if sale_item.product_id_id:
+                            product = sale_item.product_id
+                            cost_of_goods += (sale_item.quantity * product.cost_price)
                 
                 profit = revenue - cost_of_goods
                 profit_margin = (profit / revenue * 100) if revenue > 0 else Decimal('0')
@@ -364,8 +370,10 @@ class SalesAnalyticsViewSet(viewsets.ViewSet):
         cost_of_goods = Decimal('0')
         for sale in sales.prefetch_related('items'):
             for item in sale.items.all():
-                product = item.product_id
-                cost_of_goods += (item.quantity * product.cost_price)
+                # Handle deleted products (product_id_id is None in DB)
+                if item.product_id_id:
+                    product = item.product_id
+                    cost_of_goods += (item.quantity * product.cost_price)
         
         revenue = total_sales_amount - total_discount
         profit = revenue - cost_of_goods
@@ -1006,8 +1014,11 @@ class SalesStatsViewSet(viewsets.ViewSet):
         cost_of_goods = Decimal('0')
         for sale in all_sales.prefetch_related('items'):
             for item in sale.items.all():
-                if item.product_id and item.product_id.cost_price:
-                    cost_of_goods += Decimal(str(item.quantity)) * Decimal(str(item.product_id.cost_price))
+                # Handle deleted products - check raw FK ID first before accessing related object
+                if item.product_id_id:  # Check if FK points to an actual product
+                    product = item.product_id
+                    if product and product.cost_price:
+                        cost_of_goods += Decimal(str(item.quantity)) * Decimal(str(product.cost_price))
         
         # Calculate total wastage loss (both product and ingredient)
         product_wastage_total = ProductWastage.objects.aggregate(
@@ -1050,7 +1061,10 @@ class ProductStatsViewSet(viewsets.ViewSet):
         limit = int(request.query_params.get('limit', 10))
         
         # Query ACTUAL sales items from database
-        top_products = SaleItem.objects.values('product_id').annotate(
+        # Exclude items with NULL product_id (deleted products)
+        top_products = SaleItem.objects.filter(
+            product_id__isnull=False  # Only include items with valid products
+        ).values('product_id').annotate(
             product_name=F('product_id__name'),
             quantity_sold=Sum('quantity', default=Decimal('0')),
             total_sales_amt=Sum('subtotal', default=Decimal('0')),

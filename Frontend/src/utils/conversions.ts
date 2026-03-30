@@ -3,7 +3,7 @@
  * to UI types (with numeric values)
  */
 
-import { ApiUser, ApiProduct, ApiSale, ApiSaleItem, UiUser, UiProduct, UiSale } from './apiTypes';
+import { ApiUser, ApiProduct, ApiSale, ApiSaleItem, UiUser, UiProduct, UiSale, ApiSaleDetail, UiSaleDetail } from './apiTypes';
 import { toNumber } from './numericUtils';
 
 /**
@@ -60,5 +60,20 @@ export function convertApiSaleItemToUi(apiSaleItem: ApiSaleItem) {
     unit_price: toNumber(unit_price),
     subtotal: toNumber(subtotal),
   };
+}
+
+/**
+ * Convert API SaleDetail response to UI SaleDetail format
+ * Includes conversion of sale data and all items
+ */
+export function convertApiSaleDetailToUi(apiSaleDetail: ApiSaleDetail): UiSaleDetail {
+  const { subtotal, discount_amount, total_amount, items, ...rest } = apiSaleDetail;
+  return {
+    ...rest,
+    subtotal: toNumber(subtotal),
+    discount_amount: toNumber(discount_amount),
+    total_amount: toNumber(total_amount),
+    items: items.map(convertApiSaleItemToUi),
+  } as UiSaleDetail;
 }
 
