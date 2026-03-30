@@ -200,11 +200,16 @@ class IngredientAdmin(admin.ModelAdmin):
         'ingredient_id',
         'name',
         'category_id',
-        'supplier',
+        'base_unit',
+        'total_quantity',
+        'low_stock_threshold',
+        'is_active',
     )
     
     list_filter = (
         'category_id',
+        'tracking_type',
+        'is_active',
         'created_at',
     )
     
@@ -219,26 +224,30 @@ class IngredientAdmin(admin.ModelAdmin):
             'fields': (
                 'name',
                 'category_id',
-                'description',
+                'tracking_type',
+                'base_unit',
             ),
         }),
         ('Stock Management', {
             'fields': (
-                'quantity',
-                'reorder_level',
+                'total_quantity',
+                'low_stock_threshold',
+                'shelf_life',
+                'shelf_unit',
             ),
         }),
         ('Supplier Information', {
             'fields': (
                 'supplier',
                 'supplier_contact',
-                'cost_per_unit',
             ),
         }),
         ('Metadata', {
             'fields': (
                 'ingredient_id',
+                'is_active',
                 'created_at',
+                'updated_at',
             ),
             'classes': ('collapse',),
         }),
@@ -246,7 +255,9 @@ class IngredientAdmin(admin.ModelAdmin):
     
     readonly_fields = (
         'ingredient_id',
+        'total_quantity',
         'created_at',
+        'updated_at',
     )
 
 
@@ -495,16 +506,25 @@ class DiscountAdmin(admin.ModelAdmin):
     list_display = (
         'discount_id',
         'name',
+        'discount_type',
+        'value',
+        'is_active',
+        'start_date',
+        'end_date',
         'created_at',
     )
     
     list_filter = (
+        'discount_type',
+        'applicable_to',
+        'is_active',
         'created_at',
     )
     
     search_fields = (
         'discount_id',
         'name',
+        'description',
     )
     
     fieldsets = (
@@ -514,29 +534,39 @@ class DiscountAdmin(admin.ModelAdmin):
                 'description',
             ),
         }),
-        ('Discount Details', {
+        ('Discount Type & Value', {
             'fields': (
-                'kind',
-                'percentage',
-                'fixed_amount',
+                'discount_type',
+                'value',
             ),
+            'description': 'For Percentage: value 0-100 | For FixedAmount: any positive number'
         }),
         ('Applicability', {
             'fields': (
+                'applicable_to',
                 'target_category_id',
                 'target_product_id',
             ),
         }),
-        ('Dates', {
+        ('Date & Time Range', {
             'fields': (
                 'start_date',
                 'end_date',
+                'start_time',
+                'end_time',
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Status', {
+            'fields': (
+                'is_active',
             ),
         }),
         ('Metadata', {
             'fields': (
                 'discount_id',
                 'created_at',
+                'updated_at',
             ),
             'classes': ('collapse',),
         }),
@@ -545,6 +575,7 @@ class DiscountAdmin(admin.ModelAdmin):
     readonly_fields = (
         'discount_id',
         'created_at',
+        'updated_at',
     )
 
 
@@ -590,12 +621,12 @@ class NotificationAdmin(admin.ModelAdmin):
                 'title',
                 'message',
                 'type',
+                'icon',
             ),
         }),
         ('Target Audience', {
-            'fields': (
-                'target_role',
-            ),
+            'description': 'Users who have received this notification (managed via receipts below)',
+            'fields': (),
         }),
         ('Metadata', {
             'fields': (
@@ -665,7 +696,10 @@ class ProductWastageAdmin(admin.ModelAdmin):
     list_display = (
         'wastage_id',
         'product_id',
+        'quantity',
+        'total_loss',
         'reason_id',
+        'created_at',
     )
     
     list_filter = (
@@ -683,13 +717,17 @@ class ProductWastageAdmin(admin.ModelAdmin):
             'fields': (
                 'product_id',
                 'quantity',
+                'unit_cost',
                 'reason_id',
+            ),
+        }),
+        ('Financial Impact', {
+            'fields': (
+                'total_loss',
             ),
         }),
         ('Details', {
             'fields': (
-                'unit_cost',
-                'total_loss',
                 'notes',
                 'reported_by',
             ),
@@ -698,6 +736,7 @@ class ProductWastageAdmin(admin.ModelAdmin):
             'fields': (
                 'wastage_id',
                 'created_at',
+                'updated_at',
             ),
             'classes': ('collapse',),
         }),
@@ -705,7 +744,9 @@ class ProductWastageAdmin(admin.ModelAdmin):
     
     readonly_fields = (
         'wastage_id',
+        'total_loss',
         'created_at',
+        'updated_at',
     )
 
 
@@ -715,7 +756,10 @@ class IngredientWastageAdmin(admin.ModelAdmin):
     list_display = (
         'wastage_id',
         'ingredient_id',
+        'quantity',
+        'total_loss',
         'reason_id',
+        'created_at',
     )
     
     list_filter = (
@@ -734,13 +778,18 @@ class IngredientWastageAdmin(admin.ModelAdmin):
                 'ingredient_id',
                 'batch_id',
                 'quantity',
+                'unit_cost',
                 'reason_id',
             ),
         }),
-        ('Details', {
+        ('Calculated Fields', {
             'fields': (
-                'unit_cost',
                 'total_loss',
+            ),
+            'description': 'Auto-calculated as quantity × unit_cost',
+        }),
+        ('Additional Info', {
+            'fields': (
                 'notes',
                 'reported_by',
             ),
@@ -749,6 +798,7 @@ class IngredientWastageAdmin(admin.ModelAdmin):
             'fields': (
                 'wastage_id',
                 'created_at',
+                'updated_at',
             ),
             'classes': ('collapse',),
         }),
@@ -756,6 +806,8 @@ class IngredientWastageAdmin(admin.ModelAdmin):
     
     readonly_fields = (
         'wastage_id',
+        'total_loss',
         'created_at',
+        'updated_at',
     )
 

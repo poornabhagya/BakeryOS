@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, AlertTriangle, TrendingUp, ShoppingCart, Star, Flame, Clock, Eye, Package, ArrowRight, AlertCircle } from 'lucide-react';
-import { analyticsApi } from '../../services/api';
-import { inventoryApi } from '../../services/api';
+import { analyticsApi, inventoryApi, saleApi } from '../../services/api';
 
 export function ManagerDashboard() {
   const [isLoading, setIsLoading] = useState(true);
@@ -38,11 +37,12 @@ export function ManagerDashboard() {
         setError(null);
 
         // Fetch all analytics in parallel
-        const [salesData, productData, wastageData, lowStockData] = await Promise.all([
+        const [salesData, productData, wastageData, lowStockData, salesList] = await Promise.all([
           analyticsApi.getSalesStats(),
           analyticsApi.getProductStats(),
           analyticsApi.getWastageStats(),
           inventoryApi.getLowStock(),
+          saleApi.getAll(), // Fetch recent sales/transactions
         ]);
 
         // Process Sales Stats
@@ -75,8 +75,20 @@ export function ManagerDashboard() {
           : [];
         setLowStockItems(lowStock);
 
-        // Recent transactions - no data available since database is empty
-        setRecentTransactions([]);
+        // Process Recent Transactions from sales list
+        const transactions = (salesList?.items || [])
+          .slice(0, 5) // Get last 5 transactions
+          .map((sale: any) => ({
+            id: sale.bill_number || `BILL-${sale.id}`,
+            time: new Date(sale.created_at).toLocaleString('en-US', { 
+              month: 'short', 
+              day: 'numeric', 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            }),
+            amount: parseFloat(sale.total_amount || sale.total || 0),
+          }));
+        setRecentTransactions(transactions);
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
         setError('Failed to load dashboard data. Please try again.');

@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { X, Save, Box, DollarSign, Info } from 'lucide-react';
+import apiClient from '../../../services/api';
 
 const CATEGORIES = ['Flour', 'Dairy', 'Spices', 'Vegetables', 'Fruits', 'Oils', 'Meat', 'Seafood', 'Other'];
-const SHELF_UNITS = ['Days', 'Hours'];
+// Must match Django model SHELF_UNIT_CHOICES exactly
+const SHELF_UNITS = ['days', 'weeks', 'months', 'years'];
+// Must match Django model TRACKING_TYPE_CHOICES exactly
+const TRACKING_TYPES = ['Weight', 'Volume', 'Count'];
 
 function generateProductId() {
 	return `#PROD-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -11,45 +15,153 @@ function generateProductId() {
 interface AddIngredientItemModalProps {
 	open: boolean;
 	onClose: () => void;
+	onItemAdded?: () => void; // Callback to refresh parent data
+	ingredientCategories: { id: number; name: string; type: string }[];
 }
 
-export function AddIngredientItemModal({ open, onClose }: AddIngredientItemModalProps) {
+export function AddIngredientItemModal({ open, onClose, onItemAdded, ingredientCategories }: AddIngredientItemModalProps) {
 	const [itemId] = useState(generateProductId());
 	const [itemName, setItemName] = useState('');
 	const [category, setCategory] = useState('');
 	const [shelfLife, setShelfLife] = useState('');
-	const [shelfUnit, setShelfUnit] = useState(SHELF_UNITS[0]);
-	const [costPrice, setCostPrice] = useState('');
-	const [sellingPrice, setSellingPrice] = useState('');
+	const [shelfUnit, setShelfUnit] = useState('days'); // Must match Django choices
 	const [instructions, setInstructions] = useState('');
 	// Preferred Supplier state
 	const [preferredSupplierName, setPreferredSupplierName] = useState("");
 	const [preferredSupplierContact, setPreferredSupplierContact] = useState("");
-	const [trackingType, setTrackingType] = useState('weight');
+	const [trackingType, setTrackingType] = useState('Weight'); // Must match Django choices
 	const [lowStockThreshold, setLowStockThreshold] = useState(10);
+	
+	// Loading and toast states
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean; key: number }>({
+	  message: '',
+	  type: 'success',
+	  visible: false,
+	  key: 0,
+	});
+	
+	// Toast helper function
+	const showToast = (message: string, type: 'success' | 'error') => {
+	  setToast(prev => ({ message, type, visible: true, key: prev.key + 1 }));
+	  setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
+	};
 
-	// Profit calculation
-	let profit = null;
-	let profitPercent = null;
-	let badgeColor = '';
-	if (costPrice && sellingPrice && !isNaN(Number(costPrice)) && !isNaN(Number(sellingPrice))) {
-		const cp = Number(costPrice);
-		const sp = Number(sellingPrice);
-		if (sp > cp) {
-			profit = sp - cp;
-			profitPercent = ((profit / cp) * 100).toFixed(1);
-			badgeColor = 'bg-green-100 text-green-700 border-green-300';
-		} else if (sp < cp) {
-			profit = cp - sp;
-			profitPercent = ((profit / cp) * 100).toFixed(1);
-			badgeColor = 'bg-red-100 text-red-700 border-red-300';
+	// Helper to parse validation errors from API responses
+	const parseValidationErrors = (err: any): string => {
+		// Check if this is an ApiError with details object
+		if (err?.details && typeof err.details === 'object') {
+			const details = err.details;
+			const errorMessages: string[] = [];
+			
+			// Parse field-specific errors
+			for (const [field, messages] of Object.entries(details)) {
+				if (Array.isArray(messages)) {
+					errorMessages.push(`${field}: ${messages.join(', ')}`);
+				} else if (typeof messages === 'string') {
+					errorMessages.push(`${field}: ${messages}`);
+				}
+			}
+			
+			if (errorMessages.length > 0) {
+				console.error('[AddIngredientItemModal] Backend validation errors:', details);
+				return errorMessages.join(' | ');
+			}
 		}
-	}
+		
+		// Fallback to error message
+		if (err instanceof Error) {
+			return err.message;
+		}
+		
+		return 'Failed to create ingredient';
+	};
+
+	// Profit calculation not needed for ingredients
+	const badgeColor = '';
 
 	// ...existing code...
 
-	const handleSave = () => {
-		onClose && onClose();
+	const handleSave = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setIsLoading(true);
+		setError(null);
+		
+		try {
+			// Validate required fields
+			if (!itemName.trim()) {
+				throw new Error('Item name is required');
+			}
+			if (!category) {
+				throw new Error('Category is required');
+			}
+			
+			// Parse numeric fields to ensure correct types
+			const lowStockNum = parseFloat(String(lowStockThreshold));
+			const shelfLifeNum = shelfLife ? parseFloat(shelfLife) : 30;
+			
+			if (isNaN(lowStockNum)) {
+				throw new Error('Low stock threshold must be a valid number');
+			}
+			if (isNaN(shelfLifeNum)) {
+				throw new Error('Shelf life must be a valid number');
+			}
+			
+			// Determine base_unit based on tracking_type (matches Django model)
+			let baseUnit = 'kg'; // default for Weight
+			if (trackingType === 'Volume') {
+				baseUnit = 'liters';
+			} else if (trackingType === 'Count') {
+				baseUnit = 'pieces';
+			}
+			
+			// Construct payload matching Django Ingredient serializer EXACTLY
+			const payload = {
+				name: itemName.trim(),
+				category_id: Number(category), // PrimaryKey - must be integer ID
+				tracking_type: trackingType, // Must be 'Weight', 'Volume', or 'Count' (capitalized!)
+				base_unit: baseUnit, // Required: 'kg', 'liters', or 'pieces'
+				low_stock_threshold: lowStockNum, // Decimal field
+				shelf_life: shelfLifeNum, // Integer field
+				shelf_unit: shelfUnit, // Already lowercase from state: 'days', 'weeks', 'months', 'years'
+				supplier: preferredSupplierName?.trim() || null,
+				supplier_contact: preferredSupplierContact?.trim() || null,
+			};
+			
+			console.log('[AddIngredientItemModal] Creating ingredient with payload:', payload);
+			
+			// Make API call to create ingredient
+			const createdIngredient = await apiClient.ingredients.create(payload);
+			
+			// Show success toast
+			showToast(`Ingredient "${itemName}" created successfully!`, 'success');
+			console.log('[AddIngredientItemModal] Ingredient created:', createdIngredient);
+			
+			// Reset form
+			setItemName('');
+			setCategory('');
+			setInstructions('');
+			setPreferredSupplierName('');
+			setPreferredSupplierContact('');
+			
+			// Close modal after short delay to show toast
+			setTimeout(() => {
+				onClose();
+				// Trigger parent refresh callback
+				if (onItemAdded) {
+					onItemAdded();
+				}
+			}, 1000);
+			
+		} catch (err) {
+			const errorMessage = parseValidationErrors(err);
+			setError(errorMessage);
+			showToast(`Error: ${errorMessage}`, 'error');
+			console.error('[AddIngredientItemModal] Error creating ingredient:', err);
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	if (!open) return null;
@@ -61,7 +173,7 @@ export function AddIngredientItemModal({ open, onClose }: AddIngredientItemModal
 				<div className="sticky top-0 z-10 bg-white border-b border-gray-200 flex items-center justify-between px-6 py-4">
 					<div className="flex items-center gap-2">
 						<Box className="w-5 h-5 text-orange-500" />
-						<h3 className="text-lg font-bold text-gray-900 tracking-tight">Add New Product Item</h3>
+						<h3 className="text-lg font-bold text-gray-900 tracking-tight">Add New Ingredient Item</h3>
 					</div>
 					<button onClick={onClose} className="p-2 rounded-lg hover:bg-orange-50 transition-colors">
 						<X className="w-5 h-5 text-gray-400" />
@@ -69,7 +181,7 @@ export function AddIngredientItemModal({ open, onClose }: AddIngredientItemModal
 				</div>
 
 				{/* Scrollable Body */}
-				<form className="flex-1 overflow-y-auto p-6 min-h-0" style={{ maxHeight: 'calc(90vh - 120px)' }} onSubmit={e => { e.preventDefault(); handleSave(); }}>
+				<form id="addIngredientForm" className="flex-1 overflow-y-auto p-6 min-h-0" style={{ maxHeight: 'calc(90vh - 120px)' }} onSubmit={handleSave}>
 					{/* Basic Info Section */}
 					<div className="mb-6 bg-white rounded-xl border border-gray-100 p-4">
 						<div className="flex items-center gap-2 mb-4">
@@ -89,15 +201,19 @@ export function AddIngredientItemModal({ open, onClose }: AddIngredientItemModal
 								<label className="block text-xs font-bold uppercase text-gray-500 mb-1">Category</label>
 								<select value={category} onChange={e => setCategory(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-100 focus:ring-2 focus:ring-orange-100 focus:border-orange-500 text-sm">
 									<option value="">Select Category</option>
-									{CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+								{ingredientCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
 								</select>
 							</div>
 							<div className="col-span-12">
 								<label className="block text-xs font-bold uppercase text-gray-500 mb-1">Stock Tracking Type & Unit Logic</label>
 								<select value={trackingType} onChange={e => setTrackingType(e.target.value)} className="w-full px-3 py-2 border border-blue-200 rounded-lg bg-blue-50 focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm">
-									<option value="weight">Weight (Base Unit: Grams)</option>
-									<option value="volume">Volume (Base Unit: Milliliters)</option>
-									<option value="count">Count (Base Unit: Numbers)</option>
+							{TRACKING_TYPES.map(type => (
+								<option key={type} value={type}>
+									{type === 'Weight' && 'Weight (Base Unit: Grams)'}
+									{type === 'Volume' && 'Volume (Base Unit: Milliliters)'}
+									{type === 'Count' && 'Count (Base Unit: Numbers)'}
+								</option>
+							))}
 								</select>
 								<div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg flex gap-2 items-start mt-2">
 									<Info className="w-5 h-5 mt-0.5 text-blue-500" />
@@ -180,11 +296,32 @@ export function AddIngredientItemModal({ open, onClose }: AddIngredientItemModal
 
 				{/* Sticky Footer */}
 				<div className="sticky bottom-0 z-10 bg-white border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
-					<button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel</button>
-					<button type="submit" form="" className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium flex items-center gap-2 transition-colors">
-						<Save className="w-4 h-4" /> Save Product
+					<button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+					<button type="submit" form="addIngredientForm" disabled={isLoading} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+						{isLoading ? (
+							<>
+								<span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+								Saving...
+							</>
+						) : (
+							<>
+								<Save className="w-4 h-4" /> Save Ingredient
+							</>
+						)}
 					</button>
 				</div>
+				
+				{/* Toast Notification */}
+				{toast.visible && (
+				  <div
+				    key={toast.key}
+				    className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white font-medium z-50 animate-fade-in ${
+				      toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+				    }`}
+				  >
+				    {toast.message}
+				  </div>
+				)}
 			</div>
 		</div>
 	);

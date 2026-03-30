@@ -1,6 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toNumber } from '../../utils/numericUtils';
+import apiClient from '../../services/api';
 
 interface RecipeRow {
 	ingredientId: string;
@@ -11,24 +12,28 @@ interface RecipeRow {
 interface AddItemModalProps {
 	open: boolean;
 	onClose: () => void;
+	onItemAdded?: () => void; // Callback to refresh parent data
+	productCategories: { id: number; name: string; type: string }[];
+	ingredients: { id: number; name: string; base_unit: string }[]; // Real database ingredients
 }
 import { X, Plus, Trash2, Save, Box, DollarSign, Calculator } from 'lucide-react';
 
-const CATEGORIES = ['Buns', 'Cakes', 'Pastries', 'Bread', 'Drinks'];
-const INGREDIENTS = [
-	{ id: 'i1', name: 'Flour', unit: 'kg' },
-	{ id: 'i2', name: 'Sugar', unit: 'kg' },
-	{ id: 'i3', name: 'Butter', unit: 'g' },
-	{ id: 'i4', name: 'Eggs', unit: 'nos' },
-	{ id: 'i5', name: 'Yeast', unit: 'g' },
-];
-const SHELF_UNITS = ['Days', 'Hours'];
+const SHELF_UNITS = ['days', 'weeks', 'months', 'years'];
 
 function generateProductId() {
 	return `#PROD-${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
-export function AddItemModal({ open, onClose }: AddItemModalProps) {
+export function AddItemModal({ open, onClose, onItemAdded, productCategories, ingredients }: AddItemModalProps) {
+	// Log that the component received ingredients
+	useEffect(() => {
+		if (open && ingredients && ingredients.length > 0) {
+			console.log('[AddItemModal] Received ingredients prop:', ingredients);
+		} else if (open) {
+			console.warn('[AddItemModal] WARNING - No ingredients prop or empty array!');
+		}
+	}, [open, ingredients]);
+	
 	const [itemId] = useState(generateProductId());
 	const [itemName, setItemName] = useState('');
 	const [category, setCategory] = useState('');
@@ -40,6 +45,52 @@ export function AddItemModal({ open, onClose }: AddItemModalProps) {
 	const [recipeRows, setRecipeRows] = useState([
 		{ ingredientId: '', quantity: '', unit: '' },
 	]);
+	
+	// Loading and toast states
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean; key: number }>({
+	  message: '',
+	  type: 'success',
+	  visible: false,
+	  key: 0,
+	});
+	
+	// Toast helper function
+	const showToast = (message: string, type: 'success' | 'error') => {
+	  setToast(prev => ({ message, type, visible: true, key: prev.key + 1 }));
+	  setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
+	};
+
+	// Helper to parse validation errors from API responses
+	const parseValidationErrors = (err: any): string => {
+		// Check if this is an ApiError with details object
+		if (err?.details && typeof err.details === 'object') {
+			const details = err.details;
+			const errorMessages: string[] = [];
+			
+			// Parse field-specific errors
+			for (const [field, messages] of Object.entries(details)) {
+				if (Array.isArray(messages)) {
+					errorMessages.push(`${field}: ${messages.join(', ')}`);
+				} else if (typeof messages === 'string') {
+					errorMessages.push(`${field}: ${messages}`);
+				}
+			}
+			
+			if (errorMessages.length > 0) {
+				console.error('[AddItemModal] Backend validation errors:', details);
+				return errorMessages.join(' | ');
+			}
+		}
+		
+		// Fallback to error message
+		if (err instanceof Error) {
+			return err.message;
+		}
+		
+		return 'Failed to create product';
+	};
 
 	// Profit calculation
 	let profit = null;
@@ -60,34 +111,38 @@ export function AddItemModal({ open, onClose }: AddItemModalProps) {
 	}
 
 	const handleRecipeChange = (idx: number, field: keyof RecipeRow, value: string) => {
-    setRecipeRows(prev => prev.map((row, i) => {
-      if (i !== idx) return row;
+    console.log(`[AddItemModal] handleRecipeChange - idx: ${idx}, field: ${field}, value: "${value}"`);
+    
+    setRecipeRows(prev => {
+      const updated = prev.map((row, i) => {
+        if (i !== idx) return row;
 
-      // Ingredient selection change
-      if (field === 'ingredientId') {
-        const found = INGREDIENTS.find(ing => ing.id === value);
-        let displayUnit = '';
+        // Ingredient selection change
+        if (field === 'ingredientId') {
+          const found = ingredients.find(ing => ing.id.toString() === value);
+          let displayUnit = '';
 
-        if (found) {
-          // --- 🔥 UNIT CONVERSION LOGIC ---
-          // If stock unit is kg, convert to g for recipe
-          switch (found.unit) {
-            case 'kg': 
-              displayUnit = 'g'; 
-              break;
-            case 'l':  
-              displayUnit = 'ml'; 
-              break;
-            default:   
-              displayUnit = found.unit; // if pcs, g, ml, no changes
+          if (found) {
+            // Use the ingredient's base_unit from the database
+            displayUnit = found.base_unit || '';
+            console.log(`[AddItemModal] Ingredient selected: id=${found.id}, name=${found.name}, unit=${displayUnit}`);
+          } else {
+            console.warn(`[AddItemModal] Ingredient not found for value: "${value}"`);
           }
+          const newRow = { ...row, ingredientId: value, unit: displayUnit, quantity: '' };
+          console.log(`[AddItemModal] Updated row ${idx}:`, newRow);
+          return newRow;
         }
-        return { ...row, ingredientId: value, unit: displayUnit, quantity: '' };
-      }
 
-      // Quantity change
-      return { ...row, [field]: value };
-    }));
+        // Quantity change
+        const newRow = { ...row, [field]: value };
+        console.log(`[AddItemModal] Updated row ${idx} (${field}):`, newRow);
+        return newRow;
+      });
+      
+      console.log(`[AddItemModal] New recipeRows state after change:`, updated);
+      return updated;
+    });
   };
 
 	const handleAddRecipeRow = () => {
@@ -98,8 +153,126 @@ export function AddItemModal({ open, onClose }: AddItemModalProps) {
 		setRecipeRows(prev => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
 	};
 
-	const handleSave = () => {
-		onClose && onClose();
+	const handleSave = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setIsLoading(true);
+		setError(null);
+		
+		try {
+			console.log('[AddItemModal] ===== FORM SUBMISSION START =====');
+			console.log('[AddItemModal] Current recipeRows state:', recipeRows);
+			
+			// Validate required fields
+			if (!itemName.trim()) {
+				throw new Error('Item name is required');
+			}
+			if (!category) {
+				throw new Error('Category is required');
+			}
+			if (!costPrice || !sellingPrice) {
+				throw new Error('Cost and selling prices are required');
+			}
+			
+			console.log('[AddItemModal] Basic field validation passed');
+			
+			// Parse numeric fields to ensure correct types
+			const costPriceNum = parseFloat(costPrice);
+			const sellingPriceNum = parseFloat(sellingPrice);
+			
+			if (isNaN(costPriceNum) || isNaN(sellingPriceNum)) {
+				throw new Error('Cost and selling prices must be valid numbers');
+			}
+			
+			console.log('[AddItemModal] Price parsing passed:', { costPriceNum, sellingPriceNum });
+			
+			// Build recipe items array - filter out empty rows
+			console.log('[AddItemModal] Before filtering - recipeRows:', recipeRows);
+			
+			const filteredRows = recipeRows.filter(row => {
+				const hasIngredient = row.ingredientId && row.ingredientId.trim() !== '';
+				const hasQuantity = row.quantity && row.quantity.trim() !== '';
+				console.log(`[AddItemModal] Row filtering - ingredientId: "${row.ingredientId}" (has: ${hasIngredient}), quantity: "${row.quantity}" (has: ${hasQuantity})`);
+				return hasIngredient && hasQuantity;
+			});
+			
+			console.log('[AddItemModal] After filtering - filteredRows count:', filteredRows.length);
+			console.log('[AddItemModal] Filtered rows data:', filteredRows);
+			
+			const recipeItems = filteredRows.map((row, idx) => {
+				const ingredientId = Number(row.ingredientId);
+				const quantityRequired = parseFloat(row.quantity);
+				console.log(`[AddItemModal] Mapping row ${idx}: ingredientId=${ingredientId} (from "${row.ingredientId}"), quantity=${quantityRequired} (from "${row.quantity}")`);
+				
+				if (isNaN(ingredientId)) {
+					console.warn(`[AddItemModal] WARNING - ingredientId is NaN for row ${idx}`);
+				}
+				if (isNaN(quantityRequired)) {
+					console.warn(`[AddItemModal] WARNING - quantityRequired is NaN for row ${idx}`);
+				}
+				
+				return {
+					ingredient_id: ingredientId,
+					quantity_required: quantityRequired,
+				};
+			});
+			
+			console.log('[AddItemModal] Final recipeItems array:', recipeItems);
+			console.log('[AddItemModal] recipeItems count:', recipeItems.length);
+			
+			// Construct payload matching Django Product model
+			const payload = {
+				name: itemName.trim(),
+				category_id: Number(category),
+				cost_price: costPriceNum,
+				selling_price: sellingPriceNum,
+				shelf_life: shelfLife ? Number(shelfLife) : null,
+				shelf_unit: shelfUnit.toLowerCase(),
+				preparation_instructions: instructions.trim() || null,
+				current_stock: 0,
+				recipe_items: recipeItems, // MUST BE INCLUDED
+			};
+			
+			console.log('[AddItemModal] ===== FINAL PAYLOAD =====');
+			console.log('[AddItemModal] Submitting payload:', JSON.stringify(payload, null, 2));
+			console.log('[AddItemModal] Payload has recipe_items:', !!payload.recipe_items);
+			console.log('[AddItemModal] recipe_items is array:', Array.isArray(payload.recipe_items));
+			console.log('[AddItemModal] recipe_items length:', payload.recipe_items?.length);
+			
+			// Make API call to create product
+			const createdProduct = await apiClient.products.create(payload as any);
+			
+			console.log('[AddItemModal] ===== API RESPONSE =====');
+			console.log('[AddItemModal] Product created successfully:', createdProduct);
+			
+			// Show success toast
+			showToast(`Product "${itemName}" created successfully!`, 'success');
+			
+			// Reset form
+			setItemName('');
+			setCategory('');
+			setCostPrice('');
+			setSellingPrice('');
+			setInstructions('');
+			setRecipeRows([{ ingredientId: '', quantity: '', unit: '' }]);
+			
+			// Close modal after short delay to show toast
+			setTimeout(() => {
+				onClose();
+				// Trigger parent refresh callback
+				if (onItemAdded) {
+					onItemAdded();
+				}
+			}, 1000);
+			
+		} catch (err) {
+			const errorMessage = parseValidationErrors(err);
+			setError(errorMessage);
+			showToast(`Error: ${errorMessage}`, 'error');
+			console.error('[AddItemModal] ===== ERROR =====');
+			console.error('[AddItemModal] Error creating product:', err);
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	if (!open) return null;
@@ -119,7 +292,7 @@ export function AddItemModal({ open, onClose }: AddItemModalProps) {
 				</div>
 
 				{/* Scrollable Body */}
-				<form className="flex-1 overflow-y-auto p-6 min-h-0" style={{ maxHeight: 'calc(90vh - 120px)' }} onSubmit={e => { e.preventDefault(); handleSave(); }}>
+				<form id="addItemForm" className="flex-1 overflow-y-auto p-6 min-h-0" style={{ maxHeight: 'calc(90vh - 120px)' }} onSubmit={handleSave}>
 					{/* Basic Info Section */}
 					<div className="mb-6 bg-white rounded-xl border border-gray-100 p-4">
 						<div className="flex items-center gap-2 mb-4">
@@ -139,7 +312,7 @@ export function AddItemModal({ open, onClose }: AddItemModalProps) {
 								<label className="block text-xs font-bold uppercase text-gray-500 mb-1">Category</label>
 								<select value={category} onChange={e => setCategory(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-100 focus:ring-2 focus:ring-orange-100 focus:border-orange-500 text-sm">
 									<option value="">Select Category</option>
-									{CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+								{productCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
 								</select>
 							</div>
 							<div className="col-span-12 md:col-span-6 flex gap-2">
@@ -221,9 +394,13 @@ export function AddItemModal({ open, onClose }: AddItemModalProps) {
 													className="w-40 px-2 py-1 border border-gray-200 rounded-lg bg-gray-100 focus:ring-2 focus:ring-orange-100 focus:border-orange-500"
 												>
 													<option value="">Select Ingredient</option>
-													{INGREDIENTS.map(ing => (
-														<option key={ing.id} value={ing.id}>{ing.name}</option>
-													))}
+													{ingredients.length > 0 ? (
+														ingredients.map(ing => (
+															<option key={ing.id} value={ing.id}>{ing.name}</option>
+														))
+													) : (
+														<option disabled>No ingredients available</option>
+													)}
 												</select>
 											</td>
 											<td className="px-3 py-1">
@@ -263,11 +440,32 @@ export function AddItemModal({ open, onClose }: AddItemModalProps) {
 
 				{/* Sticky Footer */}
 				<div className="sticky bottom-0 z-10 bg-white border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
-					<button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel</button>
-					<button type="submit" form="" className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium flex items-center gap-2 transition-colors">
-						<Save className="w-4 h-4" /> Save Product
-					</button>
-				</div>
+				<button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+				<button type="submit" form="addItemForm" disabled={isLoading} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+					{isLoading ? (
+						<>
+							<span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+							Saving...
+						</>
+					) : (
+						<>
+							<Save className="w-4 h-4" /> Save Product
+						</>
+					)}
+				</button>
+			</div>
+			
+			{/* Toast Notification */}
+			{toast.visible && (
+			  <div
+			    key={toast.key}
+			    className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white font-medium z-50 animate-fade-in ${
+			      toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+			    }`}
+			  >
+			    {toast.message}
+			  </div>
+			)}
 			</div>
 		</div>
 	);
