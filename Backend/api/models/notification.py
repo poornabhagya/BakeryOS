@@ -36,10 +36,18 @@ class NotificationReceipt(models.Model):
     """
     Per-user notification tracking - marks which users have read notifications
     """
+    STATUS_CHOICES = [
+        ('unread', 'Unread'),
+        ('read', 'Read'),
+        ('snoozed', 'Snoozed'),
+        ('archived', 'Archived'),
+    ]
+    
     notification = models.ForeignKey(Notification, on_delete=models.CASCADE, related_name='receipts')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notification_receipts')
     is_read = models.BooleanField(default=False)
     read_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='unread')
     created_at = models.DateTimeField(default=timezone.now)
     
     class Meta:
@@ -49,6 +57,7 @@ class NotificationReceipt(models.Model):
             models.Index(fields=['user', 'is_read']),
             models.Index(fields=['user', 'created_at']),
             models.Index(fields=['is_read']),
+            models.Index(fields=['user', 'status']),
         ]
     
     def __str__(self):
@@ -59,4 +68,5 @@ class NotificationReceipt(models.Model):
         if not self.is_read:
             self.is_read = True
             self.read_at = timezone.now()
-            self.save(update_fields=['is_read', 'read_at'])
+            self.status = 'read'
+            self.save(update_fields=['is_read', 'read_at', 'status'])
