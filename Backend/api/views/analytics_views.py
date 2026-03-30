@@ -990,14 +990,36 @@ class SalesStatsViewSet(viewsets.ViewSet):
     GET /api/analytics/sales-stats/
     - Returns overall sales KPIs for dashboard
     - ALWAYS returns REAL database aggregations, NEVER hardcoded values
+    - Supports optional date filtering via query parameters:
+      - date_from: Start date (YYYY-MM-DD format)
+      - date_to: End date (YYYY-MM-DD format)
     """
     permission_classes = [IsAuthenticated]
     
     def list(self, request):
         """Get overall sales statistics from database"""
-        # Query ALL sales - no date filtering by default
-        # Use no filter to get complete database totals
+        # Handle optional date filtering
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        
         all_sales = Sale.objects.all()
+        
+        # Filter by date range if provided
+        if date_from:
+            try:
+                start_date = datetime.strptime(date_from, '%Y-%m-%d')
+                start_datetime = timezone.make_aware(start_date.replace(hour=0, minute=0, second=0))
+                all_sales = all_sales.filter(created_at__gte=start_datetime)
+            except (ValueError, TypeError):
+                pass  # Invalid date format, ignore filter
+        
+        if date_to:
+            try:
+                end_date = datetime.strptime(date_to, '%Y-%m-%d')
+                end_datetime = timezone.make_aware(end_date.replace(hour=23, minute=59, second=59))
+                all_sales = all_sales.filter(created_at__lte=end_datetime)
+            except (ValueError, TypeError):
+                pass  # Invalid date format, ignore filter
         
         # Calculate totals using ONLY database aggregations
         total_sales_amount = all_sales.aggregate(

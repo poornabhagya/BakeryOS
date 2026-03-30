@@ -184,6 +184,10 @@ async function makeRequest<T>(
     // Handle 400: Bad request
     if (response.status === 400) {
       console.error(`[API] Bad request on ${endpoint}:`, errorMessage);
+      // Log detailed field errors if present (from Django validation)
+      if (errorDetails && typeof errorDetails === 'object' && !Array.isArray(errorDetails)) {
+        console.error(`[API] Field validation errors:`, errorDetails);
+      }
       throw new ApiError(
         400,
         errorDetails,
@@ -663,8 +667,15 @@ export const discountApi = {
 
   create: async (data: {
     name: string;
-    percentage?: string;
-    fixed_amount?: string;
+    discount_type: 'Percentage' | 'FixedAmount';
+    value: number;
+    applicable_to: 'All' | 'Category' | 'Product';
+    start_date?: string | null;
+    end_date?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    target_category_id?: number | null;
+    target_product_id?: number | null;
   }) => {
     const response = await makeRequest<any>('/discounts/', {
       method: 'POST',

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Eye, EyeOff } from 'lucide-react';
+import { X, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import apiClient from '../../services/api';
 
 interface User {
-  id: string;
+  id: string | number;
   fullName: string;
   nic: string;
   contact: string;
@@ -17,11 +18,12 @@ interface EditUserModalProps {
   onClose: () => void;
   user: User | null;
   onUpdate: (updatedUser: any) => void;
+  onSuccess?: () => void;
 }
 
 const ROLES = ['Manager', 'Cashier', 'Baker', 'Storekeeper'];
 
-const EditUserModal: React.FC<EditUserModalProps> = ({ open, onClose, user, onUpdate }) => {
+const EditUserModal: React.FC<EditUserModalProps> = ({ open, onClose, user, onUpdate, onSuccess }) => {
   const [fullName, setFullName] = useState('');
   const [nic, setNic] = useState('');
   const [contact, setContact] = useState('');
@@ -33,6 +35,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onClose, user, onUp
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [touched, setTouched] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && user) {
@@ -58,20 +62,63 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onClose, user, onUp
 
   if (!open || !user) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setTouched(true);
-    if (!canSave) return;
-    onUpdate({
-      id: user.id,
-      fullName: fullName.trim(),
-      nic: nic.trim(),
-      contact: contact.trim(),
-      username: username.trim(),
-      role,
-      status,
-      ...(password ? { password } : {}),
-    });
-    onClose();
+    setApiError(null);
+    
+    if (!canSave) {
+      console.log('[EditUserModal] Form validation failed');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Build payload with only updated fields
+      const payload: any = {
+        full_name: fullName.trim(),
+        nic: nic.trim() || '',
+        contact: contact.trim() || '',
+        role: role,
+        status: status === 'Active' ? 'active' : 'inactive',  // Convert frontend status to backend format
+      };
+
+      // Only include password if user provided a new one
+      if (password.trim()) {
+        payload.password = password;
+      }
+
+      console.log('[EditUserModal] Submitting update payload:', payload);
+
+      // Make PATCH request to backend
+      await apiClient.users.update(Number(user.id), payload);
+
+      console.log('[EditUserModal] User updated successfully');
+
+      // Update parent component state
+      onUpdate({
+        id: user.id,
+        fullName: fullName.trim(),
+        nic: nic.trim(),
+        contact: contact.trim(),
+        username: username.trim(),
+        role,
+        status,
+      });
+
+      // Trigger refresh of user list from API
+      if (onSuccess) {
+        onSuccess();
+      }
+
+      onClose();
+    } catch (error) {
+      console.error('[EditUserModal] Error updating user:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to update user. Please try again.';
+      setApiError(errorMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const modalContent = (
@@ -84,6 +131,13 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onClose, user, onUp
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
+        {/* Error Message */}
+        {apiError && (
+          <div className="mx-6 mt-4 p-3 rounded-lg border border-red-300 bg-red-50 flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700">{apiError}</p>
+          </div>
+        )}
         {/* Body */}
         <div className="flex-1 p-6 flex flex-col gap-6">
           {/* Employee ID */}
@@ -210,17 +264,25 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onClose, user, onUp
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 font-medium transition-colors"
+            disabled={isSubmitting}
+            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 font-medium transition-colors disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            disabled={!canSave}
-            className="px-4 py-2 rounded-lg bg-orange-600 text-white font-bold hover:bg-orange-700 transition-colors disabled:opacity-60"
+            disabled={!canSave || isSubmitting}
+            className="px-4 py-2 rounded-lg bg-orange-600 text-white font-bold hover:bg-orange-700 transition-colors disabled:opacity-60 flex items-center gap-2"
           >
-            Save Changes
+            {isSubmitting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
           </button>
         </div>
       </div>
