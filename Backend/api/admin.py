@@ -592,6 +592,7 @@ class NotificationReceiptInline(admin.TabularInline):
     fields = (
         'user',
         'is_read',
+        'status',
     )
 
 
@@ -651,10 +652,12 @@ class NotificationReceiptAdmin(admin.ModelAdmin):
         'notification',
         'user',
         'is_read',
+        'status',
     )
     
     list_filter = (
         'is_read',
+        'status',
     )
     
     search_fields = (

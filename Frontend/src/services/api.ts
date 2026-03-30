@@ -868,6 +868,14 @@ export const notificationApi = {
     });
     return response;
   },
+
+  update: async (id: string, data: { status?: string }) => {
+    const response = await makeRequest<any>(`/notifications/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
 };
 
 // ============================================================

@@ -122,6 +122,50 @@ class NotificationViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         
         return Response(status=status.HTTP_204_NO_CONTENT)
     
+    def partial_update(self, request, *args, **kwargs):
+        """
+        Handle PATCH requests to update notification status.
+        Sets the status (unread/read/snoozed/archived) for the current user's receipt.
+        """
+        notification = self.get_object()
+        status_value = request.data.get('status')
+        
+        if status_value not in ['unread', 'read', 'snoozed', 'archived']:
+            return Response(
+                {'detail': f'Invalid status. Must be one of: unread, read, snoozed, archived'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            receipt = NotificationReceipt.objects.get(
+                notification=notification,
+                user=request.user
+            )
+            
+            # Update status
+            receipt.status = status_value
+            
+            # If status is 'read', also update is_read and read_at
+            if status_value == 'read':
+                receipt.is_read = True
+                receipt.read_at = timezone.now()
+            elif status_value == 'unread':
+                receipt.is_read = False
+                receipt.read_at = None
+            
+            receipt.save(update_fields=['status', 'is_read', 'read_at'])
+            
+            # Return updated notification
+            serializer = self.get_serializer(notification)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except NotificationReceipt.DoesNotExist:
+            return Response(
+                {'detail': 'Notification receipt not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    
     @action(detail=True, methods=['patch'])
     def read(self, request, pk=None):
         """Mark a specific notification as read"""
