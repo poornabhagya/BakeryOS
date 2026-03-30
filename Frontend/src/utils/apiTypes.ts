@@ -10,17 +10,20 @@
  * User type matching backend UserListSerializer response
  */
 export interface ApiUser {
-  id: number;
+  id?: number;
   username: string;
-  email: string;
+  email?: string;
   full_name: string;          // Note: backend sends 'full_name', not 'name'
   employee_id: string;
+  nic?: string | null;        // NIC Number - optional field
+  contact?: string | null;    // Contact number - optional field
   role: string;
-  status: string;
-  contact: string;
+  status: string;             // 'active', 'inactive', or 'suspended'
   avatar_color?: string;
-  created_at: string;
-  updated_at: string;
+  is_active?: boolean;        // Soft delete flag - true if user is active, false if deactivated
+  password?: string;          // Only used when creating/updating user
+  created_at?: string;
+  updated_at?: string;
 }
 
 /**
