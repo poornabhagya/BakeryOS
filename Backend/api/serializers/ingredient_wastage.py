@@ -9,6 +9,7 @@ class IngredientWastageListSerializer(serializers.ModelSerializer):
     Shows summary information without nested objects.
     """
     ingredient_name = serializers.CharField(source='ingredient_id.name', read_only=True)
+    category_name = serializers.CharField(source='ingredient_id.category_id.name', read_only=True)
     batch_reference = serializers.SerializerMethodField()
     reason_text = serializers.CharField(source='reason_id.reason', read_only=True)
     reported_by_name = serializers.SerializerMethodField()
@@ -20,6 +21,7 @@ class IngredientWastageListSerializer(serializers.ModelSerializer):
             'wastage_id',
             'ingredient_id',
             'ingredient_name',
+            'category_name',
             'batch_id',
             'batch_reference',
             'quantity',
@@ -35,6 +37,7 @@ class IngredientWastageListSerializer(serializers.ModelSerializer):
             'id',
             'wastage_id',
             'ingredient_name',
+            'category_name',
             'batch_reference',
             'reason_text',
             'reported_by_name',
@@ -205,14 +208,19 @@ class IngredientWastageCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Wastage reason is required")
         if not WastageReason.objects.filter(id=value.id).exists():
             raise serializers.ValidationError("Wastage reason does not exist")
+        if (value.reason or '').strip().lower() == 'expired':
+            raise serializers.ValidationError(
+                "'Expired' is reserved for automated system expiration and cannot be selected manually."
+            )
         return value
     
     def validate(self, data):
         """
         Validate the entire wastage record.
-        Check that ingredient has sufficient quantity.
+        Check that ingredient and optional batch have sufficient quantity.
         """
         ingredient = data.get('ingredient_id')
+        batch = data.get('batch_id')
         quantity = data.get('quantity')
         
         if ingredient and quantity:
@@ -222,21 +230,40 @@ class IngredientWastageCreateSerializer(serializers.ModelSerializer):
                     f"Insufficient ingredient quantity. Available: {ingredient.total_quantity}, "
                     f"Trying to waste: {quantity}"
                 )
+
+        if batch and quantity:
+            # Ensure the selected batch has enough remaining stock
+            if batch.current_qty < quantity:
+                raise serializers.ValidationError(
+                    f"Insufficient batch quantity. Available in batch {batch.batch_id}: {batch.current_qty}, "
+                    f"Trying to waste: {quantity}"
+                )
         
         return data
     
     def create(self, validated_data):
         """
-        Create the wastage record and deduct from ingredient total_quantity.
+        Create the wastage record and deduct stock.
+
+        If a batch is linked, deduct from that batch's current_qty and save the batch.
+        Batch save triggers ingredient total sync via existing batch signals.
+
+        If no batch is linked, deduct directly from ingredient total_quantity.
         """
         ingredient = validated_data['ingredient_id']
+        batch = validated_data.get('batch_id')
         quantity = validated_data['quantity']
+
+        # Deduct from specific batch stock when linked
+        if batch:
+            batch.current_qty -= quantity
+            batch.save()
+        else:
+            # Fallback path for wastage records without a linked batch
+            ingredient.total_quantity -= quantity
+            ingredient.save()
         
         # Create wastage record (save() will generate wastage_id)
         wastage = IngredientWastage.objects.create(**validated_data)
-        
-        # Deduct from ingredient total quantity
-        ingredient.total_quantity -= quantity
-        ingredient.save()
         
         return wastage

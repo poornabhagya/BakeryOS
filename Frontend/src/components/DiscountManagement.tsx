@@ -29,6 +29,17 @@ export default function DiscountManagement() {
   const { user } = useAuth(); // 2. Get User
   // 3. Define Permission: Only Manager has full access
   const isManager = user?.role === 'Manager';
+  const canViewDiscounts = user?.role === 'Manager' || user?.role === 'Cashier';
+
+  if (!canViewDiscounts) {
+    return (
+      <div className="p-8">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 font-semibold">
+          Access Denied: You do not have permission to view Discount Management.
+        </div>
+      </div>
+    );
+  }
 
   // --- State: API Data ---
   const [discounts, setDiscounts] = useState<Discount[]>([]);

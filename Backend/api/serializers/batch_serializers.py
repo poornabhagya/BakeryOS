@@ -17,7 +17,7 @@ class BatchListSerializer(serializers.ModelSerializer):
         model = IngredientBatch
         fields = [
             'id', 'batch_id', 'ingredient_id', 'ingredient_name', 'ingredient_unit',
-            'quantity', 'current_qty', 'made_date', 'expire_date', 'status',
+            'quantity', 'current_qty', 'cost_price', 'made_date', 'expire_date', 'status',
             'is_expired', 'days_until_expiry', 'created_at'
         ]
         read_only_fields = ['batch_id', 'created_at']

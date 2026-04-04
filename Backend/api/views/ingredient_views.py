@@ -98,11 +98,14 @@ class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         - list/retrieve/history: Manager OR Storekeeper OR Baker
         - create/update: Manager OR Storekeeper
         - delete: Manager only
-        - low-stock: Manager OR Storekeeper OR Baker
+        - low-stock: Manager OR Storekeeper
         """
-        if self.action in ['list', 'retrieve', 'history', 'low_stock']:
+        if self.action in ['list', 'retrieve', 'history']:
             # All authenticated users can view
             self.permission_classes = [IsManagerOrStorekeeperOrBaker]
+        elif self.action == 'low_stock':
+            # Only Manager and Storekeeper can access low stock endpoint
+            self.permission_classes = [IsManagerOrStorekeeper]
         elif self.action in ['create', 'update', 'partial_update']:
             # Manager and Storekeeper can create/update
             self.permission_classes = [IsManagerOrStorekeeper]
@@ -169,7 +172,7 @@ class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
     
-    @action(detail=False, methods=['get'], permission_classes=[IsManagerOrStorekeeperOrBaker])
+    @action(detail=False, methods=['get'], url_path='low-stock', permission_classes=[IsManagerOrStorekeeper])
     def low_stock(self, request):
         """
         Get ingredients below low_stock_threshold.
@@ -179,7 +182,7 @@ class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         Response: List of low-stock ingredients with quantity info
         """
         low_stock_ingredients = self.queryset.filter(
-            total_quantity__lt=F('low_stock_threshold')
+            total_quantity__lte=F('low_stock_threshold')
         ).order_by('total_quantity')
         
         serializer = IngredientListSerializer(low_stock_ingredients, many=True)

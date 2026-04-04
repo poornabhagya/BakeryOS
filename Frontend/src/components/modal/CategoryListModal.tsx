@@ -8,6 +8,7 @@ import apiClient from '../../services/api'; // Import API client for delete oper
 
 interface Category {
     id: number;
+    category_id?: string;
     name: string;
     type: string;
 }
@@ -59,7 +60,8 @@ export function CategoryListModal({ isOpen, onClose, categories = [], onCategori
     // Filter Logic
     const filteredCategories = localCategories.filter(cat =>
         cat.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cat.id.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        cat.id.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cat.category_id || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     // --- HANDLERS ---
@@ -180,7 +182,7 @@ export function CategoryListModal({ isOpen, onClose, categories = [], onCategori
                                     {filteredCategories.length > 0 ? (
                                         filteredCategories.map((category) => (
                                             <tr key={category.id} className="border-b border-gray-200 hover:bg-gray-50">
-                                                <td className="px-3 py-4 text-sm font-medium text-gray-900 w-16">CAT-{category.id}</td>
+                                                <td className="px-3 py-4 text-sm font-medium text-gray-900 w-16">{category.category_id || `CAT-${category.id}`}</td>
                                                 <td className="px-3 py-4 text-sm text-gray-900 w-auto">{category.name}</td>
                                                 {/* 5. Hide Edit/Delete Buttons for Cashier */}
                                                 {!isCashier && (

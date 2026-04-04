@@ -26,6 +26,15 @@ class ProductWastage(models.Model):
         help_text="The product that was wasted"
     )
     
+    batch = models.ForeignKey(
+        'ProductBatch',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='wastage_records',
+        help_text="The product batch this wastage came from (optional)"
+    )
+    
     quantity = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -94,6 +103,7 @@ class ProductWastage(models.Model):
     def save(self, *args, **kwargs):
         """
         Auto-generate wastage_id and calculate total_loss before saving.
+        Deduct quantity from the batch's current_qty if batch is linked.
         """
         # Generate wastage_id if not exists
         if not self.wastage_id:
@@ -113,6 +123,16 @@ class ProductWastage(models.Model):
         
         # Calculate total_loss
         self.total_loss = (self.quantity or Decimal('0')) * (self.unit_cost or Decimal('0'))
+        
+        # Deduct from batch's current_qty if batch is linked
+        if self.batch and self.quantity:
+            self.batch.current_qty -= self.quantity
+            self.batch.save()
+        
+        # Deduct from product's current_stock
+        if self.product_id and self.quantity:
+            self.product_id.current_stock -= self.quantity
+            self.product_id.save()
         
         super().save(*args, **kwargs)
     

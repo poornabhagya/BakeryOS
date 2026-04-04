@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.pagination import PageNumberPagination
 
-from api.models import Product, Category
+from api.models import Product, Category, Notification, NotificationReceipt, User
 from api.serializers import (
     ProductListSerializer,
     ProductDetailSerializer,
@@ -17,7 +17,7 @@ from api.serializers import (
     ProductSearchSerializer,
     ProductFilterSerializer,
 )
-from api.permissions import IsManager, IsManagerOrReadOnly
+from api.permissions import IsManager, IsManagerOrBaker, IsManagerOrReadOnly
 from api.utils.query_optimization import OptimizedQueryMixin, StandardPagination
 
 
@@ -44,11 +44,11 @@ class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     
     Endpoints:
     - GET /api/products/ - List products (paginated, filtered, ordered)
-    - POST /api/products/ - Create product (Manager only)
+    - POST /api/products/ - Create product (Manager or Baker)
     - GET /api/products/{id}/ - Get product details
-    - PUT /api/products/{id}/ - Update product (Manager only)
-    - PATCH /api/products/{id}/ - Partial update (Manager only)
-    - DELETE /api/products/{id}/ - Delete product (Manager only)
+    - PUT /api/products/{id}/ - Update product (Manager or Baker)
+    - PATCH /api/products/{id}/ - Partial update (Manager or Baker)
+    - DELETE /api/products/{id}/ - Delete product (Manager or Baker)
     - GET /api/products/category/{category_id}/ - Filter by category
     - GET /api/products/low-stock/ - Get low-stock products
     - GET /api/products/out-of-stock/ - Get out-of-stock products
@@ -56,7 +56,7 @@ class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     
     Permissions:
     - Manager: Full CRUD
-    - Baker: Read-only
+    - Baker: Full CRUD
     - Storekeeper: Read-only
     - Cashier: Read-only
     """
@@ -115,8 +115,8 @@ class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
             # Read-only endpoints: any authenticated user
             return [IsAuthenticated()]
         elif self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # Write endpoints: Manager only
-            return [IsManager()]
+            # Write endpoints: Manager and Baker
+            return [IsManagerOrBaker()]
         return [IsAuthenticated()]
     
     # ========== STANDARD CRUD ENDPOINTS ==========
@@ -127,6 +127,44 @@ class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     # - update: PUT /api/products/{id}/
     # - partial_update: PATCH /api/products/{id}/
     # - destroy: DELETE /api/products/{id}/
+
+    def _create_system_audit_notification(self, message: str):
+        """Create a system-wide audit notification and unread receipts for all active users."""
+        notification = Notification.objects.create(
+            title='System Audit Trail',
+            message=message,
+            type='System',
+            icon='info'
+        )
+
+        active_users = User.objects.filter(
+            is_active=True,
+            role__in=['Manager', 'Cashier', 'Baker', 'Storekeeper']
+        )
+
+        NotificationReceipt.objects.bulk_create([
+            NotificationReceipt(notification=notification, user=user, status='unread', is_read=False)
+            for user in active_users
+        ])
+
+    def perform_create(self, serializer):
+        """Create product and emit system-wide audit notification."""
+        serializer.save()
+        message = f"{self.request.user.username} added a new product: {serializer.instance.name}"
+        self._create_system_audit_notification(message)
+
+    def perform_update(self, serializer):
+        """Update product and emit system-wide audit notification."""
+        serializer.save()
+        message = f"{self.request.user.username} updated the product: {serializer.instance.name}"
+        self._create_system_audit_notification(message)
+
+    def perform_destroy(self, instance):
+        """Delete product and emit system-wide audit notification."""
+        product_name = instance.name
+        instance.delete()
+        message = f"{self.request.user.username} deleted the product: {product_name}"
+        self._create_system_audit_notification(message)
     
     # ========== CUSTOM ENDPOINTS ==========
     
@@ -136,11 +174,12 @@ class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         GET /api/products/low-stock/
         
         Return all products with low stock (current_stock < 10).
+        Uses Product.current_stock as the source of truth.
         Useful for alerts and restocking.
         
         Response: [ ProductListSerializer ]
         """
-        queryset = self.queryset.filter(current_stock__lt=10)
+        queryset = self.get_queryset().filter(current_stock__lt=10)
         serializer = ProductListSerializer(queryset, many=True)
         return Response({
             'count': queryset.count(),
@@ -153,10 +192,11 @@ class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         GET /api/products/out-of-stock/
         
         Return all products that are completely out of stock.
+        Uses Product.current_stock as the source of truth.
         
         Response: [ ProductListSerializer ]
         """
-        queryset = self.queryset.filter(current_stock__lte=0)
+        queryset = self.get_queryset().filter(current_stock__lte=0)
         serializer = ProductListSerializer(queryset, many=True)
         return Response({
             'count': queryset.count(),
@@ -169,6 +209,7 @@ class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         GET /api/products/by-category/{category_id}/
         
         Return all products in a specific category.
+        Uses Product.current_stock for quantity reporting.
         
         Parameters:
         - category_id: Category ID (numeric)
@@ -183,7 +224,7 @@ class ProductViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        queryset = self.queryset.filter(category_id=category_id)
+        queryset = self.get_queryset().filter(category_id=category_id)
         serializer = ProductListSerializer(queryset, many=True)
         return Response({
             'category': {

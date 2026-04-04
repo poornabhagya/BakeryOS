@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.pagination import PageNumberPagination
 # django_filters removed due to Django 6.0 compatibility
@@ -90,13 +90,13 @@ class CategoryViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     
     def get_permissions(self):
         """
-        Set permissions based on action:
-        - list, retrieve: IsAuthenticated (all roles can view)
-        - create, update, delete: IsManager only
+        Permissions by HTTP method:
+        - Read operations (GET/HEAD/OPTIONS): any authenticated user
+        - Write operations (POST/PUT/PATCH/DELETE): manager only
         """
-        if self.action in ['list', 'retrieve', 'by_type']:
+        if self.request.method in SAFE_METHODS:
             permission_classes = [IsAuthenticated]
-        else:  # create, update, partial_update, destroy
+        else:
             permission_classes = [IsManager]
         
         return [permission() for permission in permission_classes]

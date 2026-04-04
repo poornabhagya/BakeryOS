@@ -101,6 +101,7 @@ function generateBillNumber(counter: number): string {
 }
 
 export function BillingScreen() {
+  const COUNTER_STORAGE_KEY = 'bakery_pos_counter_open';
     const { user } = useAuth();
 
     // --- State: API Data Fetching ---
@@ -122,8 +123,8 @@ export function BillingScreen() {
           setIsLoading(true);
           setFetchError(null);
 
-          // Fetch products
-          const productsResponse = await apiClient.products.getAll();
+          // Fetch all product pages so POS has the complete searchable catalog.
+          const productsResponse = await apiClient.products.getAllPages();
           setProducts(productsResponse.items);
 
           // Fetch next bill number from backend
@@ -250,7 +251,10 @@ export function BillingScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [stockError, setStockError] = useState<string | null>(null);
   // Cash Counter state
-  const [isCounterOpen, setIsCounterOpen] = useState(false);
+  const [isCounterOpen, setIsCounterOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(COUNTER_STORAGE_KEY) === 'true';
+  });
   // Payment method & discount state
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card'>('Cash');
   
@@ -467,13 +471,36 @@ export function BillingScreen() {
     }
   };
 
-  const handleToggle = () => {
+  // Keep counter state in sync across tabs/windows.
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== COUNTER_STORAGE_KEY) return;
+      setIsCounterOpen(event.newValue === 'true');
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  const handleToggle = async () => {
     if (!isCounterOpen) {
       setIsCounterOpen(true);
+      localStorage.setItem(COUNTER_STORAGE_KEY, 'true');
+      try {
+        await apiClient.notifications.sendCounterStatus('opened');
+      } catch (error) {
+        console.error('[Counter Status Notification Error - Open]', error);
+      }
       notify(true);
     } else {
       if (window.confirm('Close counter?')) {
         setIsCounterOpen(false);
+        localStorage.removeItem(COUNTER_STORAGE_KEY);
+        try {
+          await apiClient.notifications.sendCounterStatus('closed');
+        } catch (error) {
+          console.error('[Counter Status Notification Error - Close]', error);
+        }
         setTimeout(() => notify(false), 10); // ensure state updates before showing toast
       }
     }

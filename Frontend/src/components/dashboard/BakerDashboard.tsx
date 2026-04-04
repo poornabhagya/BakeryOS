@@ -1,15 +1,75 @@
-import React, { useState, useEffect } from 'react';
-import { Flame, ChefHat, AlertCircle, Package } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Flame, ChefHat, Star } from 'lucide-react';
 import { inventoryApi, wastageApi, analyticsApi } from '../../services/api';
+
+type TimeFilter = 'Today' | 'This Week' | 'This Month';
+
+type LowStockProduct = {
+  name: string;
+  remaining: number;
+  priority: 'Urgent' | 'High' | 'Medium';
+};
+
+type WastageRow = {
+  id: string;
+  item: string;
+  qty: number;
+  reason: string;
+  createdAt: string;
+};
+
+type TopSellingRow = {
+  product_name: string;
+  quantity_sold: number;
+};
 
 export function BakerDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('Today');
 
-  const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
-  const [lowIngredients, setLowIngredients] = useState<any[]>([]);
-  const [todaysWastage, setTodaysWastage] = useState<any[]>([]);
-  const [wastageCount, setWastageCount] = useState(0);
+  const [lowStockProducts, setLowStockProducts] = useState<LowStockProduct[]>([]);
+  const [filteredWastage, setFilteredWastage] = useState<WastageRow[]>([]);
+  const [topSellingProducts, setTopSellingProducts] = useState<TopSellingRow[]>([]);
+
+  const getFilterRange = (filter: TimeFilter) => {
+    const now = new Date();
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+
+    const start = new Date(now);
+    if (filter === 'Today') {
+      start.setHours(0, 0, 0, 0);
+    } else if (filter === 'This Week') {
+      const day = start.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      start.setDate(start.getDate() + diff);
+      start.setHours(0, 0, 0, 0);
+    } else {
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+    }
+
+    return { start, end };
+  };
+
+  const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
+
+  const fetchAllWastagePages = async () => {
+    let page = 1;
+    let hasNext = true;
+    const allItems: any[] = [];
+
+    while (hasNext) {
+      const response = await wastageApi.getAll(page);
+      const pageItems = response?.items || [];
+      allItems.push(...pageItems);
+      hasNext = Boolean(response?.nextPage);
+      page += 1;
+    }
+
+    return allItems;
+  };
 
   useEffect(() => {
     const fetchBakerData = async () => {
@@ -17,36 +77,55 @@ export function BakerDashboard() {
         setIsLoading(true);
         setError(null);
 
-        // Fetch low stock products and ingredients
-        const [lowStockData, wastageData] = await Promise.all([
+        const { start, end } = getFilterRange(timeFilter);
+        const dateFrom = toIsoDate(start);
+        const dateTo = toIsoDate(end);
+
+        const [lowStockData, allWastageItems, productStats] = await Promise.all([
           inventoryApi.getLowStock(),
-          wastageApi.getAll(1),
+          fetchAllWastagePages(),
+          analyticsApi.getProductStats(dateFrom, dateTo),
         ]);
 
-        // Process low stock items (products for baking)
+        // Products: always real-time and unfiltered.
         const lowProducts = Array.isArray(lowStockData) 
-          ? lowStockData.slice(0, 5).map((item: any) => ({
+          ? lowStockData.slice(0, 8).map((item: any) => ({
               name: item.name || 'Unknown',
-              remaining: item.current_stock || 0,
-              target: item.reorder_level || 50,
-              priority: (item.current_stock || 0) === 0 ? 'Urgent' : (item.current_stock || 0) <= 5 ? 'High' : 'Medium',
+              remaining: Number(item.current_stock || 0),
+              priority: Number(item.current_stock || 0) === 0
+                ? 'Urgent'
+                : Number(item.current_stock || 0) <= 5
+                ? 'High'
+                : 'Medium',
             }))
           : [];
         setLowStockProducts(lowProducts);
 
-        // Process wastage (today's wastage)
-        const todayWastages = wastageData?.items 
-          ? wastageData.items.slice(0, 3).map((item: any) => ({
-              item: item.name || 'Unknown',
-              qty: item.quantity || 0,
-              reason: item.reason || 'Unknown',
+        // Wastage: apply selected time filter.
+        const wastageRows = (allWastageItems || [])
+          .filter((item: any) => {
+            const createdAt = new Date(item.created_at);
+            return !Number.isNaN(createdAt.getTime()) && createdAt >= start && createdAt <= end;
+          })
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 8)
+          .map((item: any) => ({
+            id: item.wastage_id || String(item.id || Math.random()),
+            item: item.product_name || item.ingredient_name || 'Unknown',
+            qty: Number(item.quantity || 0),
+            reason: item.reason_text || 'Unknown',
+            createdAt: item.created_at,
+          }));
+
+        setFilteredWastage(wastageRows);
+
+        const topRows = Array.isArray(productStats?.top_products)
+          ? productStats.top_products.slice(0, 6).map((item: any) => ({
+              product_name: item.product_name || 'Unknown',
+              quantity_sold: Number(item.quantity_sold || 0),
             }))
           : [];
-        setTodaysWastage(todayWastages);
-        setWastageCount(todayWastages.length);
-
-        // No low ingredients endpoint available yet - show empty state
-        setLowIngredients([]);
+        setTopSellingProducts(topRows);
       } catch (err) {
         console.error('Error fetching baker dashboard data:', err);
         setError('Failed to load dashboard data. Please try again.');
@@ -56,7 +135,15 @@ export function BakerDashboard() {
     };
 
     fetchBakerData();
-  }, []);
+  }, [timeFilter]);
+
+  const criticalBakeCount = useMemo(
+    () => lowStockProducts.filter((p) => p.priority === 'Urgent' || p.priority === 'High').length,
+    [lowStockProducts]
+  );
+
+  const wastageCount = filteredWastage.length;
+  const topProduct = topSellingProducts[0] || null;
   if (isLoading) {
     return (
       <div className="p-8 flex items-center justify-center">
@@ -77,8 +164,21 @@ export function BakerDashboard() {
         </div>
       )}
       
+      <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-4">
+        <label className="text-sm font-semibold text-gray-700">Filter by:</label>
+        <select
+          value={timeFilter}
+          onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
+          className="px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-gray-800 font-medium hover:bg-orange-100 transition-colors cursor-pointer"
+        >
+          <option value="Today">Today</option>
+          <option value="This Week">This Week</option>
+          <option value="This Month">This Month</option>
+        </select>
+      </div>
+
       {/* HEADER: Production Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Production Alert */}
         <div className="p-4 rounded-xl shadow-sm flex items-center gap-4 bg-orange-50 border border-orange-200">
           <div className="p-3 rounded bg-white text-orange-600">
@@ -86,7 +186,7 @@ export function BakerDashboard() {
           </div>
           <div>
             <div className="text-sm text-orange-800 font-semibold">Items to Bake</div>
-            <div className="text-lg font-bold text-orange-700">{lowStockProducts.filter(p => p.priority === 'Urgent' || p.priority === 'High').length} Items Critical</div>
+            <div className="text-lg font-bold text-orange-700">{criticalBakeCount} Items Critical</div>
           </div>
         </div>
 
@@ -96,8 +196,26 @@ export function BakerDashboard() {
             <Flame className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-sm text-red-800 font-semibold">Today's Wastage</div>
+            <div className="text-sm text-red-800 font-semibold">Wastage Issues Reported</div>
             <div className="text-lg font-bold text-red-700">{wastageCount} Issues Reported</div>
+          </div>
+        </div>
+
+        {/* Top #1 Sold Product */}
+        <div className="p-4 rounded-xl shadow-sm flex items-center gap-4 bg-blue-50 border border-blue-200">
+          <div className="p-3 rounded bg-white text-blue-600">
+            <Star className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-sm text-blue-800 font-semibold">Top #1 Sold Product</div>
+            {topProduct ? (
+              <>
+                <div className="text-lg font-bold text-blue-700">{topProduct.product_name}</div>
+                <div className="text-sm font-semibold text-blue-600">{topProduct.quantity_sold} pcs sold</div>
+              </>
+            ) : (
+              <div className="text-lg font-bold text-blue-700">No Sales Yet</div>
+            )}
           </div>
         </div>
       </div>
@@ -140,30 +258,28 @@ export function BakerDashboard() {
           </div>
         </div>
 
-        {/* RIGHT: LOW INGREDIENTS */}
+        {/* RIGHT: TOP SELLING PRODUCTS */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
-            <AlertCircle className="w-5 h-5 text-red-500" />
-            <h3 className="text-lg font-semibold text-gray-800">Low Ingredient Alert</h3>
+            <Star className="w-5 h-5 text-blue-500" />
+            <h3 className="text-lg font-semibold text-gray-800">Top Selling Products</h3>
           </div>
           <div className="overflow-hidden">
-            {lowIngredients.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No low ingredients</p>
+            {topSellingProducts.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No sales recorded for {timeFilter.toLowerCase()}</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Ingredient</th>
-                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Qty</th>
-                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Status</th>
+                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Item Name</th>
+                    <th className="text-left py-2 px-2 font-semibold text-gray-700">Quantity Sold</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {lowIngredients.map((item, index) => (
-                    <tr key={index} className="border-b border-gray-100 last:border-b-0">
-                      <td className="py-2 px-2 text-gray-800 font-medium">{item.name}</td>
-                      <td className="py-2 px-2 text-gray-600">{item.qty}</td>
-                      <td className="py-2 px-2 text-red-600 font-semibold">{item.status}</td>
+                  {topSellingProducts.map((item, index) => (
+                    <tr key={`${item.product_name}-${index}`} className="border-b border-gray-100 last:border-b-0">
+                      <td className="py-2 px-2 text-gray-800 font-medium">{item.product_name}</td>
+                      <td className="py-2 px-2 text-blue-700 font-semibold">{item.quantity_sold} pcs</td>
                     </tr>
                   ))}
                 </tbody>
@@ -174,15 +290,15 @@ export function BakerDashboard() {
 
       </div>
 
-      {/* TODAY'S WASTAGE */}
+      {/* FILTERED WASTAGE */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center gap-2 mb-4">
           <Flame className="w-5 h-5 text-red-500" />
-          <h3 className="text-lg font-semibold text-gray-800">Today's Wastage Report</h3>
+          <h3 className="text-lg font-semibold text-gray-800">{timeFilter} Wastage Report</h3>
         </div>
         <div className="overflow-hidden">
-          {todaysWastage.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">No wastage reported today</p>
+          {filteredWastage.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No wastage reported for {timeFilter.toLowerCase()}</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -193,8 +309,8 @@ export function BakerDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {todaysWastage.map((item, index) => (
-                  <tr key={index} className="border-b border-gray-100 last:border-b-0">
+                {filteredWastage.map((item) => (
+                  <tr key={item.id} className="border-b border-gray-100 last:border-b-0">
                     <td className="py-2 px-2 text-gray-800 font-medium">{item.item}</td>
                     <td className="py-2 px-2 text-red-600 font-bold">{item.qty}</td>
                     <td className="py-2 px-2 text-gray-600">{item.reason}</td>
