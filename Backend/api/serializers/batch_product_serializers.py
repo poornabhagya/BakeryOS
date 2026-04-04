@@ -20,11 +20,13 @@ class ProductBatchListSerializer(serializers.ModelSerializer):
             'product_id_val',
             'product_name',
             'quantity',
+            'current_qty',
             'made_date',
             'expire_date',
             'status',
             'days_until_expiry',
             'is_expired',
+            'notes',
             'created_at'
         ]
         read_only_fields = fields
@@ -72,6 +74,7 @@ class ProductBatchDetailSerializer(serializers.ModelSerializer):
             'product_shelf_life',
             'product_shelf_unit',
             'quantity',
+            'current_qty',
             'made_date',
             'expire_date',
             'status',
@@ -160,7 +163,6 @@ class ProductBatchUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'quantity',
             'made_date',
-            'status',
             'notes'
         ]
     

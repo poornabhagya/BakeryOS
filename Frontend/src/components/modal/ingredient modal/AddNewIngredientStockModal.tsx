@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { X, Save, Info } from 'lucide-react';
+import { X, Save, Info, AlertCircle, CheckCircle } from 'lucide-react';
+import apiClient from '../../../services/api';
 
 
 interface Ingredient {
-  id: string;
+  id: string | number;
   name: string;
   trackingType: string;
-  // ... other fields as needed
 }
 
 interface AddNewIngredientStockModalProps {
@@ -14,14 +14,7 @@ interface AddNewIngredientStockModalProps {
   onClose: () => void;
   itemName: string;
   ingredient: Ingredient | null;
-  onAddStock?: (entry: {
-    batchId: string;
-    stockDate: string;
-    expireDate: string;
-    quantity: number;
-    unit: string;
-    note?: string;
-  }) => void;
+  onAddStock?: (entry: any) => void;
 }
 
 
@@ -60,6 +53,10 @@ export const AddNewIngredientStockModal: React.FC<AddNewIngredientStockModalProp
   const [unit, setUnit] = useState(unitOptions[0]);
   const [cost, setCost] = useState<string>('');
   const [expireDate, setExpireDate] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  
   // Stock date (today)
   const todayStr = React.useMemo(() => {
     const now = new Date();
@@ -69,26 +66,92 @@ export const AddNewIngredientStockModal: React.FC<AddNewIngredientStockModalProp
     return `${yyyy}-${mm}-${dd}`;
   }, []);
   const [note, setNote] = useState('');
-  // Action is always 'Added' now
-  const action: 'Added' = 'Added';
+
+  // Unit conversion utilities
+  const convertToBaseUnit = (qty: number, selectedUnit: string, trackingType: string): number => {
+    // Convert to base unit (grams for weight, ml for volume, nos for count)
+    if (trackingType === 'weight') {
+      return selectedUnit === 'kg' ? qty * 1000 : qty;
+    }
+    if (trackingType === 'volume') {
+      return selectedUnit === 'L' ? qty * 1000 : qty;
+    }
+    return qty;
+  };
 
   // Update unit if trackingType changes
   React.useEffect(() => {
     setUnit(unitOptions[0]);
   }, [trackingType]);
 
-  const handleSave = () => {
-    if (onAddStock) {
-      onAddStock({
-        batchId: batchID,
-        stockDate: todayStr,
-        expireDate,
-        quantity,
-        unit,
-        note,
-      });
+  const handleSave = async () => {
+    setError(null);
+    setSuccess(false);
+
+    if (!ingredient) {
+      setError('Ingredient is required');
+      return;
     }
-    onClose();
+
+    if (!quantity || quantity <= 0) {
+      setError('Quantity must be greater than 0');
+      return;
+    }
+
+    if (!expireDate) {
+      setError('Expire date is required');
+      return;
+    }
+
+    if (!cost) {
+      setError('Cost is required');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const baseQuantity = convertToBaseUnit(quantity, unit, trackingType);
+
+      const parsedIngredientId = typeof ingredient.id === 'number'
+        ? ingredient.id
+        : Number(String(ingredient.id).replace(/\D/g, ''));
+
+      if (!parsedIngredientId || Number.isNaN(parsedIngredientId)) {
+        setError('Invalid ingredient ID');
+        return;
+      }
+
+      const payload = {
+        ingredient_id: parsedIngredientId,
+        quantity: String(baseQuantity),
+        cost_price: cost,
+        made_date: todayStr,
+        expire_date: expireDate,
+        notes: note || '',
+      };
+
+      const response = await apiClient.batches.createIngredientBatch(payload);
+      setSuccess(true);
+
+      if (onAddStock) {
+        onAddStock(response);
+      }
+
+      setQuantity(0);
+      setCost('');
+      setExpireDate('');
+      setNote('');
+
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create stock batch';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!open) return null;
@@ -99,12 +162,25 @@ export const AddNewIngredientStockModal: React.FC<AddNewIngredientStockModalProp
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-orange-100 bg-orange-50/60">
           <h3 className="text-lg font-bold text-orange-700">Add New Stock - {itemName}</h3>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-orange-100 transition-colors" aria-label="Close">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-orange-100 transition-colors" aria-label="Close" disabled={loading}>
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
         {/* Form */}
         <form className="flex-1 p-6 flex flex-col gap-4" onSubmit={e => { e.preventDefault(); handleSave(); }}>
+          {error && (
+            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-green-700">Stock batch created successfully!</p>
+            </div>
+          )}
           {/* Batch ID (read-only) */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Batch ID</label>
@@ -150,6 +226,7 @@ export const AddNewIngredientStockModal: React.FC<AddNewIngredientStockModalProp
               placeholder="Enter cost for this batch"
               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-100 focus:border-orange-500"
               required
+              disabled={loading}
             />
           </div>
           {/* Expire Date input */}
@@ -161,16 +238,17 @@ export const AddNewIngredientStockModal: React.FC<AddNewIngredientStockModalProp
               onChange={e => setExpireDate(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-100 focus:border-orange-500"
               required
+              disabled={loading}
             />
           </div>
           {/* Action dropdown removed: action is always 'Added' */}
           <div>
             <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Quantity</label>
-            <input type="number" value={quantity} onChange={e => setQuantity(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" min={0} required />
+            <input type="number" value={quantity} onChange={e => setQuantity(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" min={0} step="0.01" required disabled={loading} />
           </div>
           <div>
             <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Unit</label>
-            <select value={unit} onChange={e => setUnit(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+            <select value={unit} onChange={e => setUnit(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" disabled={loading}>
               {unitOptions.map(opt => (
                 <option key={opt} value={opt}>{opt}</option>
               ))}
@@ -193,7 +271,7 @@ export const AddNewIngredientStockModal: React.FC<AddNewIngredientStockModalProp
           </div>
           <div>
             <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Note</label>
-            <textarea value={note} onChange={e => setNote(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" rows={2} placeholder="Optional note..." />
+            <textarea value={note} onChange={e => setNote(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" rows={2} placeholder="Optional note..." disabled={loading} />
           </div>
           <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
             <Info className="w-4 h-4 text-blue-500" />
@@ -204,9 +282,29 @@ export const AddNewIngredientStockModal: React.FC<AddNewIngredientStockModalProp
             </span>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium flex items-center gap-2 transition-colors">
-              <Save className="w-4 h-4" /> Save
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg font-medium flex items-center gap-2 transition-colors disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" /> Save
+                </>
+              )}
             </button>
           </div>
         </form>

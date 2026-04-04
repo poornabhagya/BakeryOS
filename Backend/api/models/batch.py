@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta, datetime, date, time
+from decimal import Decimal
 from .ingredient import Ingredient
 
 
@@ -178,6 +179,62 @@ class IngredientBatch(models.Model):
             'message': f'Consumed {amount} from batch',
             'remaining': self.current_qty
         }
+
+    def save(self, *args, **kwargs):
+        """
+        Persist batch and auto-create wastage when status changes to Expired.
+
+        Rules:
+        - Only on updates (self.pk exists)
+        - If status transitions to Expired with remaining qty
+        - Create IngredientWastage with reason "Expired"
+        - Zero out current_qty before saving
+        """
+        # Ensure expiry transition is decided before transition/wastage checks.
+        if self.is_expired and self.status == 'Active':
+            self.status = 'Expired'
+
+        if not self.pk:
+            # For newly created batches, default current_qty to received quantity.
+            if self.current_qty is None or self.current_qty <= 0:
+                self.current_qty = self.quantity
+
+        if self.pk:
+            try:
+                orig = IngredientBatch.objects.get(pk=self.pk)
+            except IngredientBatch.DoesNotExist:
+                orig = None
+
+            if (
+                orig
+                and orig.status != 'Expired'
+                and self.status == 'Expired'
+                and self.current_qty > 0
+            ):
+                from .ingredient_wastage import IngredientWastage
+                from .wastage_reason import WastageReason
+
+                reason, _ = WastageReason.objects.get_or_create(
+                    reason='Expired',
+                    defaults={'description': 'Auto-recorded wastage for expired ingredient batches'}
+                )
+
+                expired_qty = self.current_qty
+                unit_cost = self.cost_price if self.cost_price is not None else Decimal('0')
+
+                IngredientWastage.objects.create(
+                    ingredient_id=self.ingredient_id,
+                    batch_id=self,
+                    quantity=expired_qty,
+                    unit_cost=unit_cost,
+                    reason_id=reason,
+                    reported_by=None,
+                    notes=f'Auto wastage recorded when batch {self.batch_id} expired.'
+                )
+
+                self.current_qty = Decimal('0')
+
+        super().save(*args, **kwargs)
     
     def mark_as_expired(self):
         """Manually mark batch as expired"""
@@ -202,10 +259,6 @@ def auto_generate_batch_id(sender, instance, **kwargs):
         last_batch = IngredientBatch.objects.all().order_by('-id').first()
         next_number = (last_batch.id if last_batch else 0) + 1
         instance.batch_id = f"BATCH-{1000 + next_number}"
-    
-    # Auto-mark as expired if expire_date has passed
-    if instance.is_expired and instance.status == 'Active':
-        instance.status = 'Expired'
     
     # Validate expire_date >= made_date
     if instance.expire_date < instance.made_date:

@@ -18,6 +18,13 @@ class Notification(models.Model):
     title = models.CharField(max_length=255)
     message = models.TextField()
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    counter_session = models.ForeignKey(
+        'CounterSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notifications',
+    )
     icon = models.CharField(max_length=50, null=True, blank=True, default='info')
     created_at = models.DateTimeField(default=timezone.now)
     
@@ -48,6 +55,7 @@ class NotificationReceipt(models.Model):
     is_read = models.BooleanField(default=False)
     read_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='unread')
+    snooze_until = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     
     class Meta:
@@ -58,6 +66,7 @@ class NotificationReceipt(models.Model):
             models.Index(fields=['user', 'created_at']),
             models.Index(fields=['is_read']),
             models.Index(fields=['user', 'status']),
+            models.Index(fields=['user', 'snooze_until']),
         ]
     
     def __str__(self):
@@ -69,4 +78,5 @@ class NotificationReceipt(models.Model):
             self.is_read = True
             self.read_at = timezone.now()
             self.status = 'read'
-            self.save(update_fields=['is_read', 'read_at', 'status'])
+            self.snooze_until = None
+            self.save(update_fields=['is_read', 'read_at', 'status', 'snooze_until'])

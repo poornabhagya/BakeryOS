@@ -507,6 +507,58 @@ export const saleApi = {
     }>('/sales/next-bill-number/');
     return response;
   },
+
+  exportExcel: async (filters?: {
+    start_date?: string;
+    end_date?: string;
+    search?: string;
+    amount_filter?: string;
+  }) => {
+    const token = getAccessToken();
+    const params = new URLSearchParams();
+
+    if (filters?.start_date) params.append('start_date', filters.start_date);
+    if (filters?.end_date) params.append('end_date', filters.end_date);
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.amount_filter && filters.amount_filter !== 'All') params.append('amount_filter', filters.amount_filter);
+
+    const query = params.toString();
+    const url = `${API_BASE}/sales/export-excel/${query ? `?${query}` : ''}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...(token && { Authorization: `Token ${token}` }),
+      },
+    });
+
+    if (response.status === 401) {
+      clearTokens();
+      window.location.href = '/login';
+      throw new ApiError(401, {}, 'Session expired. Please log in again.');
+    }
+
+    if (!response.ok) {
+      let errorDetails: any = {};
+      try {
+        errorDetails = await response.json();
+      } catch {
+        // ignore json parse errors
+      }
+      throw new ApiError(
+        response.status,
+        errorDetails,
+        errorDetails?.detail || 'Failed to export sales Excel.'
+      );
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const fileName = fileNameMatch?.[1] || `sales_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    return { blob, fileName };
+  },
 };
 
 // ============================================================
@@ -570,7 +622,7 @@ export const categoryApi = {
 
   getProducts: async () => {
     const response = await makeRequest<
-      Array<{ id: number; name: string; type: string }>
+      Array<{ id: number; category_id: string; name: string; type: string }>
     >('/categories/products/');
 
     return response;
@@ -578,7 +630,7 @@ export const categoryApi = {
 
   getIngredients: async () => {
     const response = await makeRequest<
-      Array<{ id: number; name: string; type: string }>
+      Array<{ id: number; category_id: string; name: string; type: string }>
     >('/categories/ingredients/');
 
     return response;
@@ -767,6 +819,11 @@ export const ingredientApi = {
     return response;
   },
 
+  getLowStock: async () => {
+    const response = await makeRequest<any>(`/ingredients/low-stock/`);
+    return response;
+  },
+
   create: async (data: any) => {
     const response = await makeRequest<any>('/ingredients/', {
       method: 'POST',
@@ -812,15 +869,74 @@ export const inventoryApi = {
 
 export const wastageApi = {
   getAll: async (page: number = 1) => {
-    const response = await makeRequest<PaginatedResponse<any>>(
+    const response = await makeRequest<any>(
       `/wastage/?page=${page}`
     );
+
+    const items = Array.isArray(response)
+      ? response
+      : (response?.results || response?.data || []);
+
     return {
-      items: response.results,
-      total: response.count,
-      nextPage: response.next,
-      previousPage: response.previous,
+      items,
+      total: Array.isArray(response) ? items.length : (response?.count ?? items.length),
+      nextPage: Array.isArray(response) ? null : (response?.next ?? null),
+      previousPage: Array.isArray(response) ? null : (response?.previous ?? null),
     };
+  },
+
+  exportExcel: async (filters?: {
+    search?: string;
+    date_from?: string;
+    date_to?: string;
+    time_period?: string;
+    reason?: string;
+  }) => {
+    const token = getAccessToken();
+    const params = new URLSearchParams();
+
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.date_from) params.append('date_from', filters.date_from);
+    if (filters?.date_to) params.append('date_to', filters.date_to);
+    if (filters?.time_period && filters.time_period !== 'All Time') params.append('time_period', filters.time_period);
+    if (filters?.reason && filters.reason !== 'All Reasons') params.append('reason', filters.reason);
+
+    const query = params.toString();
+    const url = `${API_BASE}/wastage/export-excel/${query ? `?${query}` : ''}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...(token && { Authorization: `Token ${token}` }),
+      },
+    });
+
+    if (response.status === 401) {
+      clearTokens();
+      window.location.href = '/login';
+      throw new ApiError(401, {}, 'Session expired. Please log in again.');
+    }
+
+    if (!response.ok) {
+      let errorDetails: any = {};
+      try {
+        errorDetails = await response.json();
+      } catch {
+        // ignore json parse errors
+      }
+      throw new ApiError(
+        response.status,
+        errorDetails,
+        errorDetails?.detail || 'Failed to export wastage Excel.'
+      );
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const fileName = fileNameMatch?.[1] || `wastage_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    return { blob, fileName };
   },
 
   create: async (data: any) => {
@@ -841,6 +957,91 @@ export const wastageApi = {
 
   delete: async (id: number) => {
     await makeRequest(`/wastage/${id}/`, { method: 'DELETE' });
+  },
+};
+
+// ============================================================
+// API Endpoints - Wastage Reasons
+// ============================================================
+
+export const wastageReasonApi = {
+  getAll: async () => {
+    const response = await makeRequest<{ count: number; results: any[] }>('/wastage-reasons/');
+    return Array.isArray(response) ? response : (response.results || []);
+  },
+
+  create: async (data: any) => {
+    const response = await makeRequest<any>('/wastage-reasons/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
+
+  update: async (id: string | number, data: any) => {
+    const response = await makeRequest<any>(`/wastage-reasons/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
+
+  delete: async (id: string | number) => {
+    await makeRequest(`/wastage-reasons/${id}/`, { method: 'DELETE' });
+  },
+};
+
+// ============================================================
+// API Endpoints - Product Wastages
+// ============================================================
+
+export const productWastagesApi = {
+  create: async (data: any) => {
+    const response = await makeRequest<any>('/product-wastages/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
+
+  getAll: async (page: number = 1) => {
+    const response = await makeRequest<PaginatedResponse<any>>(
+      `/product-wastages/?page=${page}`
+    );
+    return {
+      items: response.results,
+      total: response.count,
+      nextPage: response.next,
+      previousPage: response.previous,
+    };
+  },
+};
+
+// ============================================================
+// API Endpoints - Ingredient Wastages
+// ============================================================
+
+export const ingredientWastagesApi = {
+  create: async (data: any) => {
+    const response = await makeRequest<any>('/ingredient-wastages/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
+
+  getAll: async (page: number = 1) => {
+    const response = await makeRequest<any>(`/ingredient-wastages/?page=${page}`);
+    const items = Array.isArray(response)
+      ? response
+      : (response?.results || response?.data || []);
+
+    return {
+      items,
+      total: Array.isArray(response) ? items.length : (response?.count ?? items.length),
+      nextPage: Array.isArray(response) ? null : (response?.next ?? null),
+      previousPage: Array.isArray(response) ? null : (response?.previous ?? null),
+    };
   },
 };
 
@@ -876,6 +1077,62 @@ export const notificationApi = {
     });
     return response;
   },
+
+  sendCounterStatus: async (action: 'opened' | 'closed') => {
+    const response = await makeRequest<any>('/notifications/counter-status/', {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+    return response;
+  },
+
+  downloadCounterReportFile: async (notificationId: string | number, format: 'pdf' | 'excel') => {
+    const token = getAccessToken();
+    const endpoint = format === 'pdf' ? 'counter-report-pdf' : 'counter-report-excel';
+    const url = `${API_BASE}/notifications/${endpoint}/${notificationId}/`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...(token && { Authorization: `Token ${token}` }),
+      },
+    });
+
+    if (response.status === 401) {
+      clearTokens();
+      window.location.href = '/login';
+      throw new ApiError(401, {}, 'Session expired. Please log in again.');
+    }
+
+    if (!response.ok) {
+      let errorDetails: any = {};
+      try {
+        errorDetails = await response.json();
+      } catch {
+        // ignore json parse errors
+      }
+      throw new ApiError(
+        response.status,
+        errorDetails,
+        errorDetails?.detail || `Failed to download shift report ${format.toUpperCase()}.`
+      );
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const fileName = fileNameMatch?.[1] || `shift_report_${notificationId}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+
+    return { blob, fileName };
+  },
+
+  downloadCounterReportPdf: async (notificationId: string | number) => {
+    return notificationApi.downloadCounterReportFile(notificationId, 'pdf');
+  },
+
+  downloadCounterReportExcel: async (notificationId: string | number) => {
+    return notificationApi.downloadCounterReportFile(notificationId, 'excel');
+  },
 };
 
 // ============================================================
@@ -888,6 +1145,16 @@ export const batchApi = {
     return response;
   },
 
+  getProductBatchesById: async (productId: number) => {
+    // Filter batches by product using query parameters
+    // Endpoint: GET /api/product-batches/?product={productId}
+    const endpoint = `/product-batches/?product=${productId}`;
+    console.log('[batchApi.getProductBatchesById] Calling endpoint:', endpoint);
+    const response = await makeRequest<any[]>(endpoint);
+    console.log('[batchApi.getProductBatchesById] Response for product', productId, ':', response);
+    return response;
+  },
+
   createProductBatch: async (data: any) => {
     const response = await makeRequest<any>('/product-batches/', {
       method: 'POST',
@@ -897,16 +1164,73 @@ export const batchApi = {
   },
 
   getIngredientBatches: async () => {
-    const response = await makeRequest<any[]>('/ingredient-batches/');
+    const response = await makeRequest<any[]>('/batches/');
+    return response;
+  },
+
+  getIngredientBatchesById: async (ingredientId: number | string) => {
+    // Backend specific endpoint for ingredient batches
+    // Use the base endpoint with filter to get ALL batches (including expired), 
+    // instead of by-ingredient/ which only gives active stock
+    const endpoint = `/batches/?ingredient_id=${ingredientId}`;
+    console.log('[batchApi.getIngredientBatchesById] Calling endpoint:', endpoint);
+    const response = await makeRequest<any[]>(endpoint);
+    console.log('[batchApi.getIngredientBatchesById] Response for ingredient', ingredientId, ':', response);
     return response;
   },
 
   createIngredientBatch: async (data: any) => {
-    const response = await makeRequest<any>('/ingredient-batches/', {
+    const response = await makeRequest<any>('/batches/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
     return response;
+  },
+
+  runExpiryCheck: async () => {
+    const response = await makeRequest<{ detail: string; message: string }>('/batches/run-expiry-check/', {
+      method: 'POST',
+    });
+    return response;
+  },
+
+  exportExcel: async () => {
+    const token = getAccessToken();
+    const url = `${API_BASE}/batches/export-excel/`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...(token && { Authorization: `Token ${token}` }),
+      },
+    });
+
+    if (response.status === 401) {
+      clearTokens();
+      window.location.href = '/login';
+      throw new ApiError(401, {}, 'Session expired. Please log in again.');
+    }
+
+    if (!response.ok) {
+      let errorDetails: any = {};
+      try {
+        errorDetails = await response.json();
+      } catch {
+        // ignore json parse errors
+      }
+      throw new ApiError(
+        response.status,
+        errorDetails,
+        errorDetails?.detail || 'Failed to export stock Excel.'
+      );
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const fileName = fileNameMatch?.[1] || `current_stock_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    return { blob, fileName };
   },
 };
 
@@ -928,8 +1252,16 @@ export const analyticsApi = {
     return response;
   },
 
-  getProductStats: async () => {
-    const response = await makeRequest<any>('/analytics/product-stats/');
+  getProductStats: async (dateFrom?: string, dateTo?: string) => {
+    let endpoint = '/analytics/product-stats/';
+    if (dateFrom || dateTo) {
+      const params = new URLSearchParams();
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
+      endpoint += `?${params.toString()}`;
+    }
+
+    const response = await makeRequest<any>(endpoint);
     return response;
   },
 
@@ -950,6 +1282,47 @@ export const analyticsApi = {
     const response = await makeRequest<any>(endpoint);
     return response;
   },
+
+  exportDashboardSummaryExcel: async (timeFilter: 'Today' | 'This Week' | 'This Month') => {
+    const token = getAccessToken();
+    const params = new URLSearchParams();
+    params.append('time_filter', timeFilter);
+    const url = `${API_BASE}/dashboard/export-summary-excel/?${params.toString()}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...(token && { Authorization: `Token ${token}` }),
+      },
+    });
+
+    if (response.status === 401) {
+      clearTokens();
+      window.location.href = '/login';
+      throw new ApiError(401, {}, 'Session expired. Please log in again.');
+    }
+
+    if (!response.ok) {
+      let errorDetails: any = {};
+      try {
+        errorDetails = await response.json();
+      } catch {
+        // ignore json parse errors
+      }
+      throw new ApiError(
+        response.status,
+        errorDetails,
+        errorDetails?.detail || 'Failed to export dashboard summary Excel.'
+      );
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    const fileName = fileNameMatch?.[1] || `dashboard_summary_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    return { blob, fileName };
+  },
 };
 
 // ============================================================
@@ -964,6 +1337,9 @@ const apiClient = {
   categories: categoryApi,
   discounts: discountApi,  ingredients: ingredientApi,  inventory: inventoryApi,
   wastage: wastageApi,
+  wastageReason: wastageReasonApi,
+  productWastages: productWastagesApi,
+  ingredientWastages: ingredientWastagesApi,
   notifications: notificationApi,
   batches: batchApi,
   analytics: analyticsApi,

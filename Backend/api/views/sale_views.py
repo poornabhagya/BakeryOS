@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Sum, Count, Avg, Q, Prefetch
 from django.utils import timezone
+from django.http import HttpResponse
 from datetime import datetime, timedelta
 from api.models import Sale, SaleItem, User
 from api.serializers import SaleListSerializer, SaleDetailSerializer, SaleCreateSerializer
@@ -84,8 +85,8 @@ class SaleViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
             queryset = queryset.filter(cashier_id=user)
         
         # Filter by date if provided
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
+        start_date = self.request.query_params.get('start_date') or self.request.query_params.get('date_from')
+        end_date = self.request.query_params.get('end_date') or self.request.query_params.get('date_to')
         
         if start_date:
             try:
@@ -105,6 +106,16 @@ class SaleViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         payment_method = self.request.query_params.get('payment_method')
         if payment_method:
             queryset = queryset.filter(payment_method=payment_method)
+
+        # Search by bill number (matches Sales History PDF screen behavior).
+        search = (self.request.query_params.get('search') or '').strip()
+        if search:
+            queryset = queryset.filter(bill_number__icontains=search)
+
+        # Optional amount filter parity with Sales History screen.
+        amount_filter = (self.request.query_params.get('amount_filter') or '').strip().lower()
+        if amount_filter == 'high':
+            queryset = queryset.filter(total_amount__gt=1000)
         
         # Filter by cashier if provided
         cashier_id = self.request.query_params.get('cashier_id')
@@ -358,3 +369,80 @@ class SaleViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
                 {'error': f'Failed to get next bill number: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=False, methods=['get'], url_path='export-excel')
+    def export_excel(self, request):
+        """Export filtered sales history to Excel with a total revenue summary row."""
+        sales = self.get_queryset().order_by('-date_time')
+
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font
+        except ImportError:
+            return Response(
+                {'detail': 'Excel generation dependency missing. Install openpyxl.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Sales History'
+
+        headers = [
+            'Bill Number',
+            'Date & Time',
+            'Cashier Name',
+            'Payment Method',
+            'Subtotal',
+            'Discount',
+            'Final Total',
+        ]
+        sheet.append(headers)
+        for cell in sheet[1]:
+            cell.font = Font(bold=True)
+
+        total_revenue = 0
+        for sale in sales:
+            cashier_name = sale.cashier_id.full_name or sale.cashier_id.username
+            subtotal = float(sale.subtotal or 0)
+            discount = float(sale.discount_amount or 0)
+            final_total = float(sale.total_amount or 0)
+
+            total_revenue += final_total
+
+            sheet.append([
+                sale.bill_number,
+                timezone.localtime(sale.date_time).strftime('%Y-%m-%d %I:%M:%S %p'),
+                cashier_name,
+                sale.payment_method,
+                subtotal,
+                discount,
+                final_total,
+            ])
+
+        summary_row_idx = sheet.max_row + 1
+        sheet.append(['', '', '', '', '', 'Total Revenue', total_revenue])
+        sheet[f'F{summary_row_idx}'].font = Font(bold=True)
+        sheet[f'G{summary_row_idx}'].font = Font(bold=True)
+
+        sheet.column_dimensions['A'].width = 18
+        sheet.column_dimensions['B'].width = 24
+        sheet.column_dimensions['C'].width = 24
+        sheet.column_dimensions['D'].width = 18
+        sheet.column_dimensions['E'].width = 14
+        sheet.column_dimensions['F'].width = 14
+        sheet.column_dimensions['G'].width = 14
+
+        from io import BytesIO
+        output = BytesIO()
+        workbook.save(output)
+        excel_bytes = output.getvalue()
+        output.close()
+
+        filename = f"sales_report_{timezone.localtime().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        response = HttpResponse(
+            excel_bytes,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response

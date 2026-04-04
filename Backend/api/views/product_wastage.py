@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from datetime import timedelta
@@ -12,7 +12,7 @@ from api.serializers import (
     ProductWastageDetailSerializer,
     ProductWastageCreateSerializer,
 )
-from api.permissions import CanReportProductWastage, IsManager
+from api.permissions import IsManager
 
 
 class ProductWastageViewSet(viewsets.ModelViewSet):
@@ -21,7 +21,7 @@ class ProductWastageViewSet(viewsets.ModelViewSet):
     
     Endpoints:
     - GET /api/product-wastages/ - List all wastages
-    - POST /api/product-wastages/ - Create new wastage (Baker, Cashier, Manager)
+    - POST /api/product-wastages/ - Create new wastage (Any authenticated user)
     - GET /api/product-wastages/{id}/ - Get wastage details
     - DELETE /api/product-wastages/{id}/ - Delete wastage (Manager only)
     - GET /api/product-wastages/analytics/ - Wastage analytics
@@ -33,6 +33,7 @@ class ProductWastageViewSet(viewsets.ModelViewSet):
         'reported_by'
     ).all()
     permission_classes = [IsAuthenticated]
+    pagination_class = None
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -44,13 +45,18 @@ class ProductWastageViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """Set permissions based on action."""
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated()]
+
         if self.action == 'create':
-            # Can report: Baker, Cashier, Manager
-            return [CanReportProductWastage()]
+            # Any authenticated user can report product wastage
+            return [IsAuthenticated()]
         elif self.action == 'destroy':
             # Only Manager can delete
             return [IsManager()]
-        return [IsAuthenticated()]
+
+        # Restrict remaining write operations (PUT/PATCH) to Manager.
+        return [IsManager()]
     
     def list(self, request, *args, **kwargs):
         """
@@ -102,7 +108,7 @@ class ProductWastageViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """
         Create a new product wastage record.
-        Only Baker, Cashier, and Manager can create (permission enforced).
+        Any authenticated user can create (permission enforced).
         """
         # Set reported_by to current user if not provided
         data = request.data.copy()

@@ -77,3 +77,43 @@ export function convertApiSaleDetailToUi(apiSaleDetail: ApiSaleDetail): UiSaleDe
   } as UiSaleDetail;
 }
 
+function formatNumberForUnit(value: number): string {
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+  return value.toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+}
+
+/**
+ * Smart quantity display formatter for ingredient quantities.
+ * Expects database values in base units:
+ * - weight: grams (g)
+ * - volume: milliliters (ml)
+ * - count: nos
+ */
+export function formatQuantityForDisplay(quantity: number | string, trackingType: string): string {
+  const qty = toNumber(quantity);
+  const safeQty = Number.isFinite(qty) ? qty : 0;
+  const type = (trackingType || '').toLowerCase();
+
+  if (type === 'weight') {
+    if (safeQty >= 1000) {
+      return `${formatNumberForUnit(safeQty / 1000)} kg`;
+    }
+    return `${formatNumberForUnit(safeQty)} g`;
+  }
+
+  if (type === 'volume') {
+    if (safeQty >= 1000) {
+      return `${formatNumberForUnit(safeQty / 1000)} L`;
+    }
+    return `${formatNumberForUnit(safeQty)} ml`;
+  }
+
+  if (type === 'count') {
+    return `${formatNumberForUnit(safeQty)} nos`;
+  }
+
+  return formatNumberForUnit(safeQty);
+}
+

@@ -194,12 +194,18 @@ class IngredientUpdateSerializer(serializers.ModelSerializer):
     """
     Serializer for updating existing ingredients.
     
-    Only allows updating specific fields (not name, category, tracking_type).
+    Allows updating core ingredient details: name, category, tracking type, quantity,
+    and supplier information.
     """
+    category_id = serializers.PrimaryKeyRelatedField(queryset=Category.objects.filter(type='Ingredient'))
     
     class Meta:
         model = Ingredient
         fields = [
+            'name',
+            'category_id',
+            'tracking_type',
+            'total_quantity',
             'supplier',
             'supplier_contact',
             'base_unit',
@@ -209,11 +215,36 @@ class IngredientUpdateSerializer(serializers.ModelSerializer):
             'is_active',
         ]
     
+    def validate_name(self, value):
+        """Validate ingredient name"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("Name cannot be empty.")
+        if len(value) < 2:
+            raise serializers.ValidationError("Name must be at least 2 characters.")
+        if len(value) > 100:
+            raise serializers.ValidationError("Name must be at most 100 characters.")
+        return value.strip()
+    
+    def validate_category_id(self, value):
+        """Ensure category is Ingredient type"""
+        if value.type != 'Ingredient':
+            raise serializers.ValidationError(
+                f"Category '{value.name}' is a {value.type} category. "
+                "Please select an Ingredient-type category."
+            )
+        return value
+    
     def validate_base_unit(self, value):
         """Validate base unit"""
         if not value or not value.strip():
             raise serializers.ValidationError("Base unit cannot be empty.")
         return value.strip()
+    
+    def validate_total_quantity(self, value):
+        """Validate total quantity"""
+        if value < 0:
+            raise serializers.ValidationError("Total quantity cannot be negative.")
+        return value
     
     def validate_low_stock_threshold(self, value):
         """Validate low stock threshold"""
@@ -226,6 +257,27 @@ class IngredientUpdateSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Shelf life must be greater than 0.")
         return value
+    
+    def validate(self, data):
+        """Validate combined fields"""
+        # Check for duplicate name in same category (only if name or category is being updated)
+        if 'name' in data or 'category_id' in data:
+            instance = self.instance
+            name = data.get('name', instance.name)
+            category = data.get('category_id', instance.category_id)
+            
+            # Check for duplicate but exclude current instance
+            existing = Ingredient.objects.filter(
+                category_id=category,
+                name__iexact=name
+            ).exclude(id=instance.id).exists()
+            
+            if existing:
+                raise serializers.ValidationError(
+                    f"An ingredient named '{name}' already exists in category '{category.name}'."
+                )
+        
+        return data
 
 
 class IngredientMinimalSerializer(serializers.ModelSerializer):

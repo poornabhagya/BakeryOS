@@ -1,12 +1,14 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.pagination import PageNumberPagination
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, Prefetch
 from django.utils import timezone
 from datetime import timedelta
 from api.models import ProductBatch, Product
+from api.services import produce_product
 from api.serializers import (
     ProductBatchListSerializer,
     ProductBatchDetailSerializer,
@@ -54,15 +56,15 @@ class ProductBatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     # Query optimization profiles
     optimized_relations = {
         'list': {
-            'select_related': ['product'],
+            'select_related': ['product_id'],
             'prefetch_related': [],
         },
         'retrieve': {
-            'select_related': ['product'],
+            'select_related': ['product_id'],
             'prefetch_related': ['stock_history'],
         },
         'expiring': {
-            'select_related': ['product'],
+            'select_related': ['product_id'],
             'prefetch_related': [],
         }
     }
@@ -82,30 +84,47 @@ class ProductBatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         return ProductBatchListSerializer
     
     def get_permissions(self):
-        """Set permissions based on action"""
-        if self.action == 'create':
-            return [IsManagerOrBaker()]  # Baker can create, Manager can too
-        elif self.action in ['update', 'partial_update']:
-            return [IsManagerOrBaker()]  # Baker can update, Manager can too
-        elif self.action == 'use_batch':
-            return [IsManagerOrBaker()]  # Baker can use, Manager can too
-        elif self.action == 'destroy':
-            return [IsManager()]  # Only Manager can delete
-        elif self.action == 'get_expiring':
-            return [IsManagerOrBaker()]  # Baker and Manager can check
-        return [IsManagerOrStorekeeperOrBaker()]  # All can view, limited write access
+        """Set permissions based on request type and action."""
+        # Allow all authenticated users (including Cashier) to read batches/history.
+        if self.request.method in SAFE_METHODS:
+            return [IsAuthenticated()]
+
+        # Restrict write operations.
+        if self.action in ['create', 'update', 'partial_update', 'use_batch']:
+            return [IsManagerOrBaker()]
+        if self.action == 'destroy':
+            return [IsManager()]
+
+        # Fallback to manager-only for any other non-safe method.
+        return [IsManager()]
     
     def get_queryset(self):
-        """Filter batches based on user role"""
-        queryset = ProductBatch.objects.all().prefetch_related('product_id')
+        """
+        Filter batches based on query parameters.
         
-        # Apply filters
-        product_id = self.request.query_params.get('product_id')
+        Supports:
+        - product or product_id: Filter by product ID (e.g., ?product=1023)
+        - status: Filter by batch status (e.g., ?status=Active)
+        """
+        queryset = ProductBatch.objects.all().select_related('product_id')
+        
+        # Get query parameters - support both 'product' and 'product_id' for compatibility
+        product_param = self.request.query_params.get('product') or self.request.query_params.get('product_id')
         status = self.request.query_params.get('status')
         
-        if product_id:
-            queryset = queryset.filter(product_id__id=product_id)
+        # Filter by product ID if provided
+        if product_param:
+            try:
+                # Convert string parameter to integer
+                product_id = int(product_param)
+                # Filter by the product_id ForeignKey field
+                queryset = queryset.filter(product_id=product_id)
+            except (ValueError, TypeError) as e:
+                # If conversion fails, log it and return empty queryset
+                print(f"[ProductBatchViewSet] Invalid product_id parameter: {product_param}. Error: {e}")
+                queryset = queryset.none()
         
+        # Filter by status if provided
         if status:
             queryset = queryset.filter(status=status)
         
@@ -113,20 +132,50 @@ class ProductBatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """
-        Create a new product batch.
-        
-        When batch is created:
-        1. Auto-generate batch_id (PROD-BATCH-1001, etc.)
-        2. Auto-calculate expire_date from product.shelf_life
-        3. Add quantity to product.current_stock
-        4. Create ProductStockHistory entry for audit trail
+        Create product stock through centralized production engine.
+
+        Instead of serializer.save(), this endpoint now routes production to
+        produce_product(product_id, quantity_to_produce), which performs:
+        - strict ingredient FIFO deduction,
+        - product running-balance increment,
+        - product batch audit-log creation,
+        - stock history creation.
         """
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        batch = serializer.save()
-        
-        # Return created batch in detail format
-        output_serializer = ProductBatchDetailSerializer(batch)
+        product_id = request.data.get('product_id')
+        quantity_to_produce = request.data.get('quantity')
+
+        if product_id is None or quantity_to_produce is None:
+            return Response(
+                {'error': 'product_id and quantity are required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            production_result = produce_product(
+                product_id=int(product_id),
+                quantity_to_produce=quantity_to_produce,
+            )
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'Invalid product_id or quantity format'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DjangoValidationError as exc:
+            error_message = '; '.join(exc.messages) if getattr(exc, 'messages', None) else str(exc)
+            return Response(
+                {'error': error_message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Product.DoesNotExist:
+            return Response(
+                {'error': 'Product not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        created_batch = ProductBatch.objects.select_related('product_id').get(
+            id=production_result['product_batch_id']
+        )
+        output_serializer = ProductBatchDetailSerializer(created_batch)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
     
     def destroy(self, request, *args, **kwargs):

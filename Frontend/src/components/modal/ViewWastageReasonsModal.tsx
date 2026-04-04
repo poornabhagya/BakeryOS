@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Trash2, FileQuestion } from 'lucide-react';
+import { X, Trash2, FileQuestion, Loader2, AlertCircle } from 'lucide-react';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
-import { useAuth } from '../../context/AuthContext'; // 1. Auth Import
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 export interface WastageReason {
   id: string;
@@ -17,31 +18,81 @@ interface ViewWastageReasonsModalProps {
   onDelete: (id: string) => void;
 }
 
-const DUMMY_REASONS: WastageReason[] = [
-  { id: 'wastage_abc123', name: 'Expired', note: 'Product expired before sale.' },
-  { id: 'wastage_def456', name: 'Damaged', note: 'Damaged during transport.' },
-  { id: 'wastage_ghi789', name: 'Spoiled', note: 'Spoiled due to improper storage.' },
-];
-
 export const ViewWastageReasonsModal: React.FC<ViewWastageReasonsModalProps> = ({ open, onClose, reasons, onDelete }) => {
-  const { user } = useAuth(); // 2. Get User
+  const { user } = useAuth();
   // 3. Permission Check: Only Manager can delete
   const isManager = user?.role === 'Manager';
 
+  const [displayedReasons, setDisplayedReasons] = useState<WastageReason[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  
+  // Fetch wastage reasons from backend
+  useEffect(() => {
+    if (!open) return;
+
+    const fetchReasons = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await apiClient.wastageReason.getAll();
+        // Map backend response to frontend interface
+        // Backend returns: {id, reason_id, reason, description}
+        // Frontend needs: {id, name, note}
+        const mappedReasons = (data || []).map((reason: any) => ({
+          id: reason.id?.toString() || '',
+          name: reason.reason || reason.name || '',
+          note: reason.description || reason.note || '',
+        }));
+        setDisplayedReasons(mappedReasons);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to fetch wastage reasons';
+        setError(errorMessage);
+        console.error('Error fetching wastage reasons:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReasons();
+  }, [open]);
   
   if (!open) return null;
 
-  const displayReasons = reasons && reasons.length > 0 ? reasons : DUMMY_REASONS;
+  const finalReasons = displayedReasons && displayedReasons.length > 0 ? displayedReasons : reasons;
 
   const handleDelete = (id: string) => {
     setDeleteId(id);
+    setDeleteError(null);
   };
 
-  const handleConfirmDelete = () => {
-    if (deleteId) {
+  const handleConfirmDelete = async () => {
+    if (!deleteId) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      // Make DELETE request to backend
+      await apiClient.wastageReason.delete(deleteId);
+
+      // Remove the deleted reason from the list
+      setDisplayedReasons((prev) => prev.filter((reason) => reason.id !== deleteId));
+
+      // Call the parent onDelete callback for any additional cleanup
       onDelete(deleteId);
+
+      // Close the delete confirmation modal
       setDeleteId(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete wastage reason';
+      setDeleteError(errorMessage);
+      console.error('Error deleting wastage reason:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -50,7 +101,7 @@ export const ViewWastageReasonsModal: React.FC<ViewWastageReasonsModalProps> = (
   };
 
   const getDeleteName = () => {
-    const found = displayReasons.find(r => r.id === deleteId);
+    const found = finalReasons.find(r => r.id === deleteId);
     return found ? found.name : '';
   };
 
@@ -66,13 +117,28 @@ export const ViewWastageReasonsModal: React.FC<ViewWastageReasonsModalProps> = (
         </div>
         {/* Body */}
         <div className="flex-1 p-6 overflow-y-auto">
-          {displayReasons.length === 0 ? (
+          {/* Loading State */}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+              <Loader2 className="w-12 h-12 mb-3 text-orange-400 animate-spin" />
+              <div className="text-lg font-semibold mb-1">Loading wastage reasons...</div>
+            </div>
+          ) : error ? (
+            // Error State
+            <div className="flex flex-col items-center justify-center py-12 text-red-500">
+              <AlertCircle className="w-12 h-12 mb-3 text-red-400" />
+              <div className="text-lg font-semibold mb-1">Error loading wastage reasons</div>
+              <div className="text-sm text-red-400">{error}</div>
+            </div>
+          ) : finalReasons.length === 0 ? (
+            // Empty State
             <div className="flex flex-col items-center justify-center py-12 text-gray-400">
               <FileQuestion className="w-12 h-12 mb-3 text-orange-300" />
               <div className="text-lg font-semibold mb-1">No wastage reasons defined yet.</div>
               <div className="text-sm text-gray-400">Add a new reason to get started.</div>
             </div>
           ) : (
+            // Data State
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
@@ -85,7 +151,7 @@ export const ViewWastageReasonsModal: React.FC<ViewWastageReasonsModalProps> = (
                   </tr>
                 </thead>
                 <tbody>
-                  {displayReasons.map((reason) => (
+                  {finalReasons.map((reason) => (
                     <tr key={reason.id} className="border-b last:border-b-0 hover:bg-orange-50/30 group">
                       <td className="px-3 py-2 text-xs text-gray-400 font-mono truncate max-w-[100px]">{reason.id}</td>
                       <td className="px-3 py-2 font-semibold text-gray-800">{reason.name}</td>
@@ -122,6 +188,9 @@ export const ViewWastageReasonsModal: React.FC<ViewWastageReasonsModalProps> = (
         onClose={handleCloseDelete}
         onConfirm={handleConfirmDelete}
         itemName={getDeleteName()}
+        isLoading={isDeleting}
+        title="Delete Wastage Reason"
+        error={deleteError}
       />
     </>,
     document.body

@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import transaction
 from api.models import Product, Category, RecipeItem, Ingredient
 from api.validators import (
     validate_positive_number, validate_non_negative_number,
@@ -27,10 +28,13 @@ class ProductListSerializer(serializers.ModelSerializer):
     """
     Serializer for listing products with calculated fields.
     Used for: GET /api/products/
+    
+    IMPORTANT: Uses Product.current_stock as the absolute source of truth for quantity.
     """
     category_name = serializers.CharField(source='category_id.name', read_only=True)
     profit_margin = serializers.SerializerMethodField()
     status = serializers.CharField(read_only=True)
+    quantity = serializers.SerializerMethodField()
     recipe_items = serializers.SerializerMethodField()
     
     class Meta:
@@ -38,14 +42,18 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'product_id', 'name', 'category_id', 'category_name',
             'cost_price', 'selling_price', 'profit_margin',
-            'current_stock', 'status', 'shelf_life', 'shelf_unit',
+            'current_stock', 'quantity', 'status', 'shelf_life', 'shelf_unit',
             'recipe_items', 'created_at'
         ]
-        read_only_fields = ['product_id', 'recipe_items', 'created_at']
+        read_only_fields = ['product_id', 'recipe_items', 'created_at', 'current_stock', 'quantity']
     
     def get_profit_margin(self, obj):
         """Return profit margin as percentage"""
         return round(obj.profit_margin, 2)
+    
+    def get_quantity(self, obj):
+        """Return current product stock from Product.current_stock."""
+        return float(obj.current_stock) if obj.current_stock else 0.0
     
     def get_recipe_items(self, obj):
         """Get recipe items for the product"""
@@ -58,13 +66,16 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     Serializer for detailed product information.
     Includes category details, profit margin, and recipe items.
     Used for: GET /api/products/{id}/
+    
+    IMPORTANT: Uses Product.current_stock as the absolute source of truth for quantity.
     """
     category_name = serializers.CharField(source='category_id.name', read_only=True)
     category_type = serializers.CharField(source='category_id.type', read_only=True)
     profit_margin = serializers.SerializerMethodField()
     status = serializers.CharField(read_only=True)
-    is_low_stock = serializers.BooleanField(read_only=True)
-    is_out_of_stock = serializers.BooleanField(read_only=True)
+    is_low_stock = serializers.SerializerMethodField()
+    is_out_of_stock = serializers.SerializerMethodField()
+    quantity = serializers.SerializerMethodField()
     recipe_items = serializers.SerializerMethodField()
     
     class Meta:
@@ -73,15 +84,29 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             'id', 'product_id', 'name', 'description', 'image_url',
             'category_id', 'category_name', 'category_type',
             'cost_price', 'selling_price', 'profit_margin',
-            'current_stock', 'status', 'is_low_stock', 'is_out_of_stock',
+            'current_stock', 'quantity', 'status', 'is_low_stock', 'is_out_of_stock',
             'shelf_life', 'shelf_unit', 'recipe_items',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['product_id', 'recipe_items', 'created_at', 'updated_at']
+        read_only_fields = ['product_id', 'recipe_items', 'created_at', 'updated_at', 'current_stock', 'quantity']
     
     def get_profit_margin(self, obj):
         """Return profit margin as percentage with 2 decimals"""
         return round(obj.profit_margin, 2)
+    
+    def get_quantity(self, obj):
+        """Return current product stock from Product.current_stock."""
+        return float(obj.current_stock) if obj.current_stock else 0.0
+    
+    def get_is_low_stock(self, obj):
+        """Check low stock status using Product.current_stock."""
+        quantity = float(obj.current_stock) if obj.current_stock else 0.0
+        return quantity < 10
+    
+    def get_is_out_of_stock(self, obj):
+        """Check out-of-stock status using Product.current_stock."""
+        quantity = float(obj.current_stock) if obj.current_stock else 0.0
+        return quantity <= 0
     
     def get_recipe_items(self, obj):
         """Get recipe items for the product"""
@@ -194,6 +219,75 @@ class ProductCreateSerializer(serializers.ModelSerializer):
         if value:
             value = sanitize_html(value)
         return value
+
+    def validate_recipe_items(self, value):
+        """
+        Validate writable nested recipe items payload.
+
+        Expected item format:
+        {'ingredient_id': <int>, 'quantity_required': <decimal-like string/number>}
+        """
+        if value is None:
+            return []
+
+        normalized_items = []
+        seen_ingredient_ids = set()
+
+        for idx, item in enumerate(value):
+            if not isinstance(item, dict):
+                raise serializers.ValidationError(
+                    f"recipe_items[{idx}] must be an object"
+                )
+
+            ingredient_raw = item.get('ingredient_id')
+            quantity_raw = item.get('quantity_required')
+
+            if ingredient_raw in (None, ''):
+                raise serializers.ValidationError(
+                    f"recipe_items[{idx}].ingredient_id is required"
+                )
+
+            if quantity_raw in (None, ''):
+                raise serializers.ValidationError(
+                    f"recipe_items[{idx}].quantity_required is required"
+                )
+
+            try:
+                ingredient_id = int(ingredient_raw)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(
+                    f"recipe_items[{idx}].ingredient_id must be an integer"
+                )
+
+            try:
+                quantity_required = Decimal(str(quantity_raw))
+            except Exception:
+                raise serializers.ValidationError(
+                    f"recipe_items[{idx}].quantity_required must be a valid decimal"
+                )
+
+            if quantity_required <= 0:
+                raise serializers.ValidationError(
+                    f"recipe_items[{idx}].quantity_required must be greater than 0"
+                )
+
+            if ingredient_id in seen_ingredient_ids:
+                raise serializers.ValidationError(
+                    f"Duplicate ingredient_id {ingredient_id} in recipe_items"
+                )
+
+            if not Ingredient.objects.filter(id=ingredient_id).exists():
+                raise serializers.ValidationError(
+                    f"Ingredient with id {ingredient_id} does not exist"
+                )
+
+            seen_ingredient_ids.add(ingredient_id)
+            normalized_items.append({
+                'ingredient_id': ingredient_id,
+                'quantity_required': quantity_required,
+            })
+
+        return normalized_items
     
     def validate(self, data):
         """Custom validation for product data"""
@@ -223,36 +317,38 @@ class ProductCreateSerializer(serializers.ModelSerializer):
         
         return data
     
+    @transaction.atomic
     def create(self, validated_data):
-        """Create product with auto-generated product_id and nested recipe items"""
-        # Extract recipe items from validated data
+        """Create product and persist all validated nested recipe items atomically."""
         recipe_items_data = validated_data.pop('recipe_items', [])
-        
-        # Create product
+
         product = Product.objects.create(**validated_data)
-        
-        # Create recipe items if provided
+
         if recipe_items_data:
-            for recipe_item_data in recipe_items_data:
-                try:
-                    ingredient_id = int(recipe_item_data.get('ingredient_id'))
-                    quantity_required = Decimal(str(recipe_item_data.get('quantity_required', 0)))
-                    
-                    if quantity_required <= 0:
-                        continue
-                    
-                    # Get the Ingredient instance for the ForeignKey relationship
-                    ingredient = Ingredient.objects.get(id=ingredient_id)
-                    
-                    RecipeItem.objects.create(
+            ingredient_ids = [item['ingredient_id'] for item in recipe_items_data]
+            ingredient_map = {
+                ing.id: ing
+                for ing in Ingredient.objects.filter(id__in=ingredient_ids)
+            }
+
+            recipe_objects = []
+            for item in recipe_items_data:
+                ingredient = ingredient_map.get(item['ingredient_id'])
+                if ingredient is None:
+                    raise serializers.ValidationError(
+                        f"Ingredient with id {item['ingredient_id']} does not exist"
+                    )
+
+                recipe_objects.append(
+                    RecipeItem(
                         product_id=product,
                         ingredient_id=ingredient,
-                        quantity_required=quantity_required
+                        quantity_required=item['quantity_required'],
                     )
-                except (ValueError, Ingredient.DoesNotExist):
-                    # Recipe items are optional for product creation - skip invalid items
-                    continue
-        
+                )
+
+            RecipeItem.objects.bulk_create(recipe_objects)
+
         return product
     
     def to_representation(self, instance):
@@ -263,11 +359,52 @@ class ProductCreateSerializer(serializers.ModelSerializer):
         data['recipe_items'] = RecipeItemSerializer(recipe_items, many=True).data
         return data
     
+    @transaction.atomic
     def update(self, instance, validated_data):
-        """Update product fields"""
+        """
+        Update product and nested recipe items atomically.
+
+        - Product scalar fields are updated normally.
+        - If recipe_items is provided, existing recipe rows are replaced with the payload.
+        - If recipe_items is omitted, existing recipe rows are left unchanged.
+        """
+        recipe_items_data = validated_data.pop('recipe_items', None)
+
+        # Update main product fields first.
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        # Only touch recipe rows when the client explicitly sends recipe_items.
+        if recipe_items_data is not None:
+            # Replace existing recipe rows with the provided set.
+            instance.recipe_items.all().delete()
+
+            if recipe_items_data:
+                ingredient_ids = [item['ingredient_id'] for item in recipe_items_data]
+                ingredient_map = {
+                    ing.id: ing
+                    for ing in Ingredient.objects.filter(id__in=ingredient_ids)
+                }
+
+                recipe_objects = []
+                for item in recipe_items_data:
+                    ingredient = ingredient_map.get(item['ingredient_id'])
+                    if ingredient is None:
+                        raise serializers.ValidationError(
+                            f"Ingredient with id {item['ingredient_id']} does not exist"
+                        )
+
+                    recipe_objects.append(
+                        RecipeItem(
+                            product_id=instance,
+                            ingredient_id=ingredient,
+                            quantity_required=item['quantity_required'],
+                        )
+                    )
+
+                RecipeItem.objects.bulk_create(recipe_objects)
+
         return instance
 
 
@@ -275,16 +412,23 @@ class ProductSearchSerializer(serializers.ModelSerializer):
     """
     Lightweight serializer for search results.
     Used for: GET /api/products/?search=query
+    
+    Uses Product.current_stock as the absolute source of truth for quantity.
     """
     category_name = serializers.CharField(source='category_id.name', read_only=True)
+    quantity = serializers.SerializerMethodField()
     
     class Meta:
         model = Product
         fields = [
             'id', 'product_id', 'name', 'category_name',
-            'selling_price', 'current_stock', 'status'
+            'selling_price', 'quantity', 'status'
         ]
-        read_only_fields = ['product_id']
+        read_only_fields = ['product_id', 'quantity']
+    
+    def get_quantity(self, obj):
+        """Return current product stock from Product.current_stock."""
+        return float(obj.current_stock) if obj.current_stock else 0.0
 
 
 class ProductFilterSerializer(serializers.Serializer):

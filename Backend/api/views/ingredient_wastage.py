@@ -12,7 +12,7 @@ from api.serializers import (
     IngredientWastageDetailSerializer,
     IngredientWastageCreateSerializer,
 )
-from api.permissions import CanReportIngredientWastage, IsManager
+from api.permissions import IsManager
 
 
 class IngredientWastageViewSet(viewsets.ModelViewSet):
@@ -21,7 +21,7 @@ class IngredientWastageViewSet(viewsets.ModelViewSet):
     
     Endpoints:
     - GET /api/ingredient-wastages/ - List all wastages
-    - POST /api/ingredient-wastages/ - Create new wastage (Storekeeper, Manager)
+    - POST /api/ingredient-wastages/ - Create new wastage (Any authenticated user)
     - GET /api/ingredient-wastages/{id}/ - Get wastage details
     - DELETE /api/ingredient-wastages/{id}/ - Delete wastage (Manager only)
     - GET /api/ingredient-wastages/analytics/ - Wastage analytics
@@ -34,6 +34,7 @@ class IngredientWastageViewSet(viewsets.ModelViewSet):
         'reported_by'
     ).all()
     permission_classes = [IsAuthenticated]
+    pagination_class = None
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -46,8 +47,8 @@ class IngredientWastageViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """Set permissions based on action."""
         if self.action == 'create':
-            # Can report: Storekeeper, Manager
-            return [CanReportIngredientWastage()]
+            # Any authenticated user can report ingredient wastage
+            return [IsAuthenticated()]
         elif self.action == 'destroy':
             # Only Manager can delete
             return [IsManager()]
@@ -108,7 +109,7 @@ class IngredientWastageViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """
         Create a new ingredient wastage record.
-        Only Storekeeper and Manager can create (permission enforced).
+        Any authenticated user can create (permission enforced).
         """
         # Set reported_by to current user if not provided
         data = request.data.copy()

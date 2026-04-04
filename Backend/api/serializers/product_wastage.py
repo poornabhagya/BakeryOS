@@ -9,6 +9,7 @@ class ProductWastageListSerializer(serializers.ModelSerializer):
     Shows summary information without nested objects.
     """
     product_name = serializers.CharField(source='product_id.name', read_only=True)
+    category_name = serializers.CharField(source='product_id.category_id.name', read_only=True)
     reason_text = serializers.CharField(source='reason_id.reason', read_only=True)
     reported_by_name = serializers.SerializerMethodField()
     
@@ -19,6 +20,7 @@ class ProductWastageListSerializer(serializers.ModelSerializer):
             'wastage_id',
             'product_id',
             'product_name',
+            'category_name',
             'quantity',
             'unit_cost',
             'total_loss',
@@ -32,6 +34,7 @@ class ProductWastageListSerializer(serializers.ModelSerializer):
             'id',
             'wastage_id',
             'product_name',
+            'category_name',
             'reason_text',
             'reported_by_name',
             'total_loss',
@@ -130,20 +133,25 @@ class ProductWastageCreateSerializer(serializers.ModelSerializer):
     """
     Create serializer for product wastages.
     Includes validation and returns created wastage_id in response.
+    Automatically deducts from batch and product stock.
     """
+    batch_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    
     class Meta:
         model = ProductWastage
         fields = [
             'id',
             'wastage_id',
             'product_id',
+            'batch_id',
+            'batch',
             'quantity',
             'unit_cost',
             'reason_id',
             'reported_by',
             'notes',
         ]
-        read_only_fields = ['id', 'wastage_id']
+        read_only_fields = ['id', 'wastage_id', 'batch']
     
     def validate_quantity(self, value):
         """Validate that quantity is positive."""
@@ -171,6 +179,10 @@ class ProductWastageCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Wastage reason is required")
         if not WastageReason.objects.filter(id=value.id).exists():
             raise serializers.ValidationError("Wastage reason does not exist")
+        if (value.reason or '').strip().lower() == 'expired':
+            raise serializers.ValidationError(
+                "'Expired' is reserved for automated system expiration and cannot be selected manually."
+            )
         return value
     
     def validate(self, data):
@@ -180,6 +192,7 @@ class ProductWastageCreateSerializer(serializers.ModelSerializer):
         """
         product = data.get('product_id')
         quantity = data.get('quantity')
+        batch_id = self.initial_data.get('batch_id')
         
         if product and quantity:
             # Check if product has enough stock
@@ -188,21 +201,40 @@ class ProductWastageCreateSerializer(serializers.ModelSerializer):
                     f"Insufficient stock. Available: {product.current_stock}, "
                     f"Trying to waste: {quantity}"
                 )
+            
+            # If batch_id is provided, validate batch exists and has enough qty
+            if batch_id:
+                from api.models import ProductBatch
+                try:
+                    batch = ProductBatch.objects.get(id=batch_id)
+                    if batch.current_qty < quantity:
+                        raise serializers.ValidationError(
+                            f"Insufficient batch stock. Available: {batch.current_qty}, "
+                            f"Trying to waste: {quantity}"
+                        )
+                except ProductBatch.DoesNotExist:
+                    raise serializers.ValidationError("Batch does not exist")
         
         return data
     
     def create(self, validated_data):
         """
-        Create the wastage record and deduct from product stock.
+        Create the wastage record. Stock deduction happens in the model's save() method.
         """
-        product = validated_data['product_id']
-        quantity = validated_data['quantity']
+        # Get batch_id from initial data (since it's write_only)
+        batch_id = self.initial_data.get('batch_id')
         
-        # Create wastage record (save() will generate wastage_id)
+        # Link batch if provided
+        if batch_id:
+            from api.models import ProductBatch
+            try:
+                batch = ProductBatch.objects.get(id=batch_id)
+                validated_data['batch'] = batch
+            except ProductBatch.DoesNotExist:
+                pass
+        
+        # Create wastage record
+        # The model's save() method will handle all stock deductions
         wastage = ProductWastage.objects.create(**validated_data)
-        
-        # Deduct from product stock
-        product.current_stock -= quantity
-        product.save()
         
         return wastage

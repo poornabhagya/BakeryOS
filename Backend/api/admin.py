@@ -99,8 +99,15 @@ class CategoryAdmin(admin.ModelAdmin):
 # PRODUCT ADMIN
 # ============================================================
 
+class RecipeItemInline(admin.TabularInline):
+    model = RecipeItem
+    extra = 1
+    fields = ('ingredient_id', 'quantity_required', 'created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at')
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
+    inlines = [RecipeItemInline]
     
     list_display = (
         'product_id',
@@ -272,6 +279,7 @@ class ProductBatchAdmin(admin.ModelAdmin):
         'batch_id',
         'product_id',
         'quantity',
+        'current_qty',
         'status',
     )
     
@@ -295,6 +303,7 @@ class ProductBatchAdmin(admin.ModelAdmin):
         ('Batch Details', {
             'fields': (
                 'quantity',
+                'current_qty',
                 'made_date',
                 'expire_date',
                 'status',
@@ -316,6 +325,7 @@ class ProductBatchAdmin(admin.ModelAdmin):
     
     readonly_fields = (
         'batch_id',
+        'status',
         'created_at',
         'updated_at',
     )
@@ -371,6 +381,7 @@ class IngredientBatchAdmin(admin.ModelAdmin):
     
     readonly_fields = (
         'batch_id',
+        'status',
         'created_at',
     )
 

@@ -1,6 +1,6 @@
 
 import React from "react";
-import { Trash2, CheckCircle2 } from "lucide-react";
+import { Trash2, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface DeleteConfirmationModalProps {
   isOpen: boolean;
@@ -9,11 +9,22 @@ interface DeleteConfirmationModalProps {
   itemName: string;
   onConfirmOnly?: () => void; // Optional, for confirm only
   isLoading?: boolean; // Optional loading state
+  title?: string; // Optional custom title (default: "Delete Product")
+  error?: string | null; // Optional error message to display
 }
 
 
 
-export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ isOpen, onClose, onConfirm, itemName, onConfirmOnly, isLoading = false }) => {
+export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  itemName, 
+  onConfirmOnly, 
+  isLoading = false,
+  title = "Delete Product",
+  error = null
+}) => {
   if (!isOpen) return null;
 
   return (
@@ -34,9 +45,16 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
             </span>
           </div>
           {/* Title */}
-          <h2 className="text-xl font-extrabold text-gray-900 mb-1 tracking-tight text-center w-full">Delete Product</h2>
+          <h2 className="text-xl font-extrabold text-gray-900 mb-1 tracking-tight text-center w-full">{title}</h2>
           {/* Subtle divider */}
           <div className="w-10 h-[3px] bg-red-200 rounded-full mx-auto mb-4"></div>
+          {/* Error message if present */}
+          {error && (
+            <div className="w-full mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
           {/* Message */}
           <p className="text-gray-700 mb-5 text-base leading-relaxed text-center w-full">
             Are you sure you want to delete <span className="font-bold text-red-600">{itemName}</span>?

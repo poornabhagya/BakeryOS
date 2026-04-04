@@ -2,12 +2,12 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Search, RotateCcw, RefreshCw, Eye, Edit, Trash2, Plus, History, Loader } from "lucide-react";
 import { useAuth } from '../context/AuthContext'; // 1. Auth Import එක දැම්මා
 import apiClient from '../services/api';
-import { convertApiProductToUi } from '../utils/conversions';
+import { formatQuantityForDisplay } from '../utils/conversions';
 
 // Modals
 import DeleteConfirmationModal from './modal/DeleteConfirmationModal';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import autoTable from 'jspdf-autotable';
 import { CategoryListModal } from './modal/CategoryListModal';
 import { AddProductCategoryModal } from './modal/AddProductCategoryModal';
 import { AddItemModal } from './modal/AddItemModal';
@@ -19,46 +19,53 @@ import { IngredientStockHistoryModal } from './modal/ingredient modal/Ingredient
 import { ViewIngredientDetailsModal } from './modal/ingredient modal/ViewIngredientDetailsModal';
 import { AddIngredientCategoryModal } from './modal/ingredient modal/AddIngredientCategoryModal';
 import { IngredientCategoryListModal } from './modal/ingredient modal/IngredientCategoryListModal';
+import { EditIngredientItemModal } from './modal/ingredient modal/EditIngredientItemModal';
 
 // --- 1. Types & Mock Data ---
 type Product = {
   id: string;  // product_id like "#PROD-1042"
   apiId: number;  // numeric database ID for API calls
   name: string;
+  category_id: number;  // numeric category ID for pre-filling dropdown
   category_name: string;
   selling_price: number;
   cost_price: number;
-  current_stock: number;
+  quantity: number;  // ← FIXED: Changed from current_stock to quantity (from API)
+  status: string;  // ← FIXED: Added status field from API (available, low_stock, out_of_stock)
 };
 
 const initialProducts: Product[] = [
-  { id: "#P001", apiId: 1, name: "Fish Bun", category_name: "Buns", selling_price: 80, cost_price: 45, current_stock: 8 },
-  { id: "#P002", apiId: 2, name: "Tea Bun", category_name: "Buns", selling_price: 60, cost_price: 30, current_stock: 25 },
-  { id: "#C001", apiId: 3, name: "Butter Cake", category_name: "Cakes", selling_price: 450, cost_price: 200, current_stock: 5 },
-  { id: "#B001", apiId: 4, name: "Sandwich Bread", category_name: "Bread", selling_price: 190, cost_price: 110, current_stock: 40 },
-  { id: "#D001", apiId: 5, name: "Iced Coffee", category_name: "Drinks", selling_price: 150, cost_price: 80, current_stock: 12 },
-  { id: "#P003", apiId: 6, name: "Chicken Roll", category_name: "Pastry", selling_price: 120, cost_price: 60, current_stock: 0 },
+  { id: "#P001", apiId: 1, name: "Fish Bun", category_id: 1, category_name: "Buns", selling_price: 80, cost_price: 45, quantity: 8, status: "available" },
+  { id: "#P002", apiId: 2, name: "Tea Bun", category_id: 1, category_name: "Buns", selling_price: 60, cost_price: 30, quantity: 25, status: "available" },
+  { id: "#C001", apiId: 3, name: "Butter Cake", category_id: 2, category_name: "Cakes", selling_price: 450, cost_price: 200, quantity: 5, status: "low_stock" },
+  { id: "#B001", apiId: 4, name: "Sandwich Bread", category_id: 3, category_name: "Bread", selling_price: 190, cost_price: 110, quantity: 40, status: "available" },
+  { id: "#D001", apiId: 5, name: "Iced Coffee", category_id: 4, category_name: "Drinks", selling_price: 150, cost_price: 80, quantity: 12, status: "available" },
+  { id: "#P003", apiId: 6, name: "Chicken Roll", category_id: 5, category_name: "Pastry", selling_price: 120, cost_price: 60, quantity: 0, status: "out_of_stock" },
 ];
 
 // --- Ingredients Type & Mock Data ---
 type Ingredient = {
-  id: string;
+  id: string;  // Display ID like "#I001"
+  apiId: number;  // Numeric database ID for API calls
   name: string;
-  category: string;
+  category: string;  // Category name for display
+  categoryId: number;  // Numeric category ID for API calls
   supplier: string;
   quantity: number;
   unit: string; // e.g., 'kg', 'L'
   trackingType: string;
   lowStockValue: number;
   supplierContact: string;
+  shelfLife: number;  // Duration number for shelf life
+  shelfUnit: string;  // Unit for shelf life: days, weeks, months, years
 };
 
 const initialIngredients: Ingredient[] = [
-  { id: "#I001", name: "All-Purpose Flour", category: "Flour", supplier: "Local Mills", quantity: 50, unit: "kg", trackingType: "Weight", lowStockValue: 10, supplierContact: "071-1234567" },
-  { id: "#I002", name: "Granulated Sugar", category: "Spices", supplier: "SweetSupplies", quantity: 30, unit: "kg", trackingType: "Weight", lowStockValue: 8, supplierContact: "072-2345678" },
-  { id: "#I003", name: "Whole Eggs", category: "Dairy", supplier: "FarmFresh", quantity: 200, unit: "pcs", trackingType: "Count", lowStockValue: 30, supplierContact: "073-3456789" },
-  { id: "#I004", name: "Butter", category: "Dairy", supplier: "DairyCo", quantity: 20, unit: "kg", trackingType: "Weight", lowStockValue: 5, supplierContact: "074-4567890" },
-  { id: "#I005", name: "Cinnamon", category: "Spices", supplier: "SpiceHouse", quantity: 5, unit: "kg", trackingType: "Weight", lowStockValue: 2, supplierContact: "075-5678901" },
+  { id: "#I001", apiId: 1, name: "All-Purpose Flour", category: "Flour", categoryId: 1, supplier: "Local Mills", quantity: 50, unit: "kg", trackingType: "Weight", lowStockValue: 10, supplierContact: "071-1234567", shelfLife: 180, shelfUnit: "days" },
+  { id: "#I002", apiId: 2, name: "Granulated Sugar", category: "Spices", categoryId: 2, supplier: "SweetSupplies", quantity: 30, unit: "kg", trackingType: "Weight", lowStockValue: 8, supplierContact: "072-2345678", shelfLife: 365, shelfUnit: "days" },
+  { id: "#I003", apiId: 3, name: "Whole Eggs", category: "Dairy", categoryId: 3, supplier: "FarmFresh", quantity: 200, unit: "pcs", trackingType: "Count", lowStockValue: 30, supplierContact: "073-3456789", shelfLife: 30, shelfUnit: "days" },
+  { id: "#I004", apiId: 4, name: "Butter", category: "Dairy", categoryId: 3, supplier: "DairyCo", quantity: 20, unit: "kg", trackingType: "Weight", lowStockValue: 5, supplierContact: "074-4567890", shelfLife: 12, shelfUnit: "months" },
+  { id: "#I005", apiId: 5, name: "Cinnamon", category: "Spices", categoryId: 2, supplier: "SpiceHouse", quantity: 5, unit: "kg", trackingType: "Weight", lowStockValue: 2, supplierContact: "075-5678901", shelfLife: 24, shelfUnit: "months" },
 ];
 
 const StockManagementScreen: React.FC = () => {
@@ -86,10 +93,12 @@ const StockManagementScreen: React.FC = () => {
         id: uiProduct.product_id,
         apiId: uiProduct.id,  // Store numeric ID for API operations
         name: uiProduct.name,
+        category_id: uiProduct.category_id,  // Extract category ID for dropdown pre-fill
         category_name: uiProduct.category_name,
         selling_price: uiProduct.selling_price,
         cost_price: uiProduct.cost_price,
-        current_stock: uiProduct.current_stock,
+        quantity: uiProduct.quantity,  // ← FIXED: Using quantity from API
+        status: uiProduct.status,  // ← FIXED: Using status from API
         shelf_life: uiProduct.shelf_life,
         shelf_unit: uiProduct.shelf_unit,
         is_active: uiProduct.is_active,
@@ -103,18 +112,26 @@ const StockManagementScreen: React.FC = () => {
   };
 
   const handleIngredientAdded = async () => {
+    if (isCashier) {
+      return;
+    }
+
     try {
       const response = await apiClient.ingredients.getAllPages();
       const uiIngredients = response.items.map((apiIngredient: any) => ({
         id: apiIngredient.ingredient_id || apiIngredient.id,
+        apiId: apiIngredient.id,  // Store numeric ID for API operations
         name: apiIngredient.name,
         category: apiIngredient.category_name,
+        categoryId: apiIngredient.category_id,  // Numeric category ID for API calls
         supplier: apiIngredient.supplier || 'N/A',
         quantity: apiIngredient.total_quantity,
         unit: apiIngredient.base_unit,
         trackingType: apiIngredient.tracking_type,
         lowStockValue: apiIngredient.low_stock_threshold,
         supplierContact: apiIngredient.supplier_contact || 'N/A',
+        shelfLife: apiIngredient.shelf_life || 30,
+        shelfUnit: apiIngredient.shelf_unit || 'days',
         is_active: apiIngredient.is_active,
       }));
       setIngredients(uiIngredients);
@@ -137,10 +154,12 @@ const StockManagementScreen: React.FC = () => {
           id: uiProduct.product_id,
           apiId: uiProduct.id,  // Store numeric ID for API operations
           name: uiProduct.name,
+          category_id: uiProduct.category_id,  // Extract category ID for dropdown pre-fill
           category_name: uiProduct.category_name,
           selling_price: uiProduct.selling_price,
           cost_price: uiProduct.cost_price,
-          current_stock: uiProduct.current_stock,
+          quantity: uiProduct.quantity,  // ← FIXED: Using quantity from API
+          status: uiProduct.status,  // ← FIXED: Using status from API
           shelf_life: uiProduct.shelf_life,
           shelf_unit: uiProduct.shelf_unit,
           is_active: uiProduct.is_active,
@@ -163,33 +182,41 @@ const StockManagementScreen: React.FC = () => {
 
   // --- Fetch Ingredients from API (All Pages) ---
   useEffect(() => {
+    if (isCashier) {
+      setIngredients([]);
+      return;
+    }
+
     const fetchIngredients = async () => {
       try {
         // Use getAllPages() to fetch all ingredients across all pages
         const response = await apiClient.ingredients.getAllPages();
         // Map backend API response to UI Ingredient type
         const uiIngredients = response.items.map((apiIngredient: any) => ({
-          id: apiIngredient.id,  // Use numeric 'id', NOT 'ingredient_id' (which is the string like "#I013")
+          id: apiIngredient.ingredient_id || apiIngredient.id,  // Display ID like "#I001"
+          apiId: apiIngredient.id,  // Store numeric ID for API operations
           name: apiIngredient.name,
           category: apiIngredient.category_name,
+          categoryId: apiIngredient.category_id,  // Numeric category ID for API calls
           supplier: apiIngredient.supplier || 'N/A',
           quantity: apiIngredient.total_quantity,
           unit: apiIngredient.base_unit,
           trackingType: apiIngredient.tracking_type,
           lowStockValue: apiIngredient.low_stock_threshold,
           supplierContact: apiIngredient.supplier_contact || 'N/A',
+          shelfLife: apiIngredient.shelf_life || 30,
+          shelfUnit: apiIngredient.shelf_unit || 'days',
           is_active: apiIngredient.is_active,
         }));
         setIngredients(uiIngredients);
       } catch (error) {
         console.error('Error fetching ingredients:', error);
-        // Fall back to initial mock data
-        setIngredients(initialIngredients);
+        setIngredients([]);
       }
     };
 
     fetchIngredients();
-  }, []);
+  }, [isCashier]);
 
   // Logic: Storekeeper ආපු ගමන් Tab එක මාරු කරනවා Ingredients වලට
   useEffect(() => {
@@ -197,6 +224,12 @@ const StockManagementScreen: React.FC = () => {
       setActiveTab("Ingredients");
     }
   }, [isStorekeeper]);
+
+  useEffect(() => {
+    if (isCashier) {
+      setActiveTab("Products");
+    }
+  }, [isCashier]);
 
   const [isIngredientCategoryListModalOpen, setIsIngredientCategoryListModalOpen] = useState(false);
   
@@ -206,31 +239,31 @@ const StockManagementScreen: React.FC = () => {
   const [sortBy, setSortBy] = useState("Name A-Z");
   const [stockStatus, setStockStatus] = useState("All Items");
   const [isLoading, setIsLoading] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isRunningExpiryCheck, setIsRunningExpiryCheck] = useState(false);
+  const [expiryToast, setExpiryToast] = useState<{ visible: boolean; type: 'success' | 'error'; message: string }>({
+    visible: false,
+    type: 'success',
+    message: '',
+  });
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isCategoryListModalOpen, setIsCategoryListModalOpen] = useState(false);
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
   const [isAddIngredientCategoryModalOpen, setIsAddIngredientCategoryModalOpen] = useState(false);
 
   // Category States
-  const [productCategories, setProductCategories] = useState<{ id: number; name: string; type: string }[]>([]);
-  const [ingredientCategories, setIngredientCategories] = useState<{ id: number; name: string; type: string }[]>([]);
+  const [productCategories, setProductCategories] = useState<{ id: number; category_id: string; name: string; type: string }[]>([]);
+  const [ingredientCategories, setIngredientCategories] = useState<{ id: number; category_id: string; name: string; type: string }[]>([]);
 
   // Fetch Product Categories from API
   useEffect(() => {
     const fetchProductCategories = async () => {
       try {
         const response = await apiClient.categories.getProducts();
-        setProductCategories(response);
+        setProductCategories(response || []);
       } catch (error) {
         console.error('Error fetching product categories:', error);
-        // Fall back to default hardcoded categories
-        setProductCategories([
-          { id: 1, name: 'Buns', type: 'Product' },
-          { id: 2, name: 'Cakes', type: 'Product' },
-          { id: 3, name: 'Bread', type: 'Product' },
-          { id: 4, name: 'Drinks', type: 'Product' },
-          { id: 5, name: 'Pastry', type: 'Product' },
-        ]);
+        setProductCategories([]);
       }
     };
     fetchProductCategories();
@@ -241,19 +274,45 @@ const StockManagementScreen: React.FC = () => {
     const fetchIngredientCategories = async () => {
       try {
         const response = await apiClient.categories.getIngredients();
-        setIngredientCategories(response);
+        setIngredientCategories(response || []);
       } catch (error) {
         console.error('Error fetching ingredient categories:', error);
-        // Fall back to default hardcoded categories
-        setIngredientCategories([
-          { id: 1, name: 'Flour', type: 'Ingredient' },
-          { id: 2, name: 'Dairy', type: 'Ingredient' },
-          { id: 3, name: 'Spices', type: 'Ingredient' },
-        ]);
+        setIngredientCategories([]);
       }
     };
     fetchIngredientCategories();
   }, []);
+
+  // Refresh categories from backend each time category modal opens.
+  useEffect(() => {
+    if (!isCategoryListModalOpen) return;
+
+    const fetchProductCategoriesOnOpen = async () => {
+      try {
+        const response = await apiClient.categories.getProducts();
+        setProductCategories(response || []);
+      } catch (error) {
+        console.error('Error fetching product categories on modal open:', error);
+      }
+    };
+
+    fetchProductCategoriesOnOpen();
+  }, [isCategoryListModalOpen]);
+
+  useEffect(() => {
+    if (!isIngredientCategoryListModalOpen) return;
+
+    const fetchIngredientCategoriesOnOpen = async () => {
+      try {
+        const response = await apiClient.categories.getIngredients();
+        setIngredientCategories(response || []);
+      } catch (error) {
+        console.error('Error fetching ingredient categories on modal open:', error);
+      }
+    };
+
+    fetchIngredientCategoriesOnOpen();
+  }, [isIngredientCategoryListModalOpen]);
 
   // Handle Category Added - Refresh the appropriate category list
   const handleCategoryAdded = async () => {
@@ -283,7 +342,7 @@ const StockManagementScreen: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, category, sortBy, stockStatus]);
-  const [stockHistoryModal, setStockHistoryModal] = useState<{ open: boolean, itemName?: string, itemId?: string }>({ open: false });
+  const [stockHistoryModal, setStockHistoryModal] = useState<{ open: boolean, itemName?: string, itemId?: string, productApiId?: number }>({ open: false });
   const [viewItem, setViewItem] = useState<{
     id: string;
     name: string;
@@ -295,6 +354,7 @@ const StockManagementScreen: React.FC = () => {
   
   const [ingredientDetailsModal, setIngredientDetailsModal] = useState<{ open: boolean, item: any | null }>({ open: false, item: null });
   const [ingredientStockHistoryModal, setIngredientStockHistoryModal] = useState<{ open: boolean, ingredient: Ingredient | null }>({ open: false, ingredient: null });
+  const [editIngredientModal, setEditIngredientModal] = useState<{ open: boolean, ingredient: Ingredient | null }>({ open: false, ingredient: null });
   const [editProductModal, setEditProductModal] = useState<{ open: boolean, item: any | null }>({ open: false, item: null });
   const [deleteModal, setDeleteModal] = useState<{ open: boolean, item: Product | null }>({ open: false, item: null });
   const [isDeleting, setIsDeleting] = useState(false);
@@ -313,6 +373,46 @@ const StockManagementScreen: React.FC = () => {
       setProducts([...initialProducts]); 
       setIsLoading(false);
     }, 1000);
+  };
+
+  const showExpiryToast = (message: string, type: 'success' | 'error') => {
+    setExpiryToast({ visible: true, type, message });
+    setTimeout(() => {
+      setExpiryToast((prev) => ({ ...prev, visible: false }));
+    }, 5500);
+  };
+
+  const sanitizeCommandOutput = (rawMessage: string) => {
+    if (!rawMessage) return '';
+
+    // Strip ANSI escape sequences and loose color tokens like [32m, [0m.
+    return rawMessage
+      .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+      .replace(/\[(?:\d{1,3}(?:;\d{1,3})*)m/g, '')
+      .trim();
+  };
+
+  const handleRunExpiryCheck = async () => {
+    try {
+      setIsRunningExpiryCheck(true);
+      const response = await apiClient.batches.runExpiryCheck();
+
+      // Re-fetch both tables immediately to reflect stock deductions.
+      await Promise.all([handleProductAdded(), handleIngredientAdded()]);
+
+      const cleanMessage = sanitizeCommandOutput(
+        response?.message || 'Expiry check completed successfully.'
+      );
+      showExpiryToast(cleanMessage || 'Expiry check completed successfully.', 'success');
+    } catch (error: any) {
+      const message =
+        error?.message ||
+        error?.response?.data?.detail ||
+        'Failed to run expiry check.';
+      showExpiryToast(message, 'error');
+    } finally {
+      setIsRunningExpiryCheck(false);
+    }
   };
 
   // --- 4. Logic: Filtering ---
@@ -335,13 +435,13 @@ const StockManagementScreen: React.FC = () => {
       });
     }
 
-    if (stockStatus === "Low Stock") list = list.filter((p) => p.current_stock > 0 && p.current_stock < 10);
-    else if (stockStatus === "In Stock") list = list.filter((p) => p.current_stock >= 10);
+    if (stockStatus === "Low Stock") list = list.filter((p) => p.quantity > 0 && p.quantity < 10);  // ← FIXED: Using quantity
+    else if (stockStatus === "In Stock") list = list.filter((p) => p.quantity >= 10);  // ← FIXED: Using quantity
 
     if (sortBy === "Name A-Z") list.sort((a, b) => a.name.localeCompare(b.name));
     else if (sortBy === "Name Z-A") list.sort((a, b) => b.name.localeCompare(a.name));
-    else if (sortBy === "Stock Low-High") list.sort((a, b) => a.current_stock - b.current_stock);
-    else if (sortBy === "Stock High-Low") list.sort((a, b) => b.current_stock - a.current_stock);
+    else if (sortBy === "Stock Low-High") list.sort((a, b) => a.quantity - b.quantity);  // ← FIXED: Using quantity
+    else if (sortBy === "Stock High-Low") list.sort((a, b) => b.quantity - a.quantity);  // ← FIXED: Using quantity
 
     return list;
   }, [products, ingredients, searchTerm, category, sortBy, stockStatus, activeTab]);
@@ -370,34 +470,195 @@ const StockManagementScreen: React.FC = () => {
     }
   };
 
-  const exportToPDF = async () => {
+  const exportToPDF = () => {
     const pdf = new jsPDF();
-    const table = document.querySelector('.stock-table') as HTMLElement;
-    if (!table) return;
+    const margin = 14;
+    let currentY = 16;
 
-    const canvas = await html2canvas(table);
-    const imgData = canvas.toDataURL('image/png');
-    const imgWidth = 210; 
-    const pageHeight = 295; 
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const isItemActive = (item: any) => item.is_active !== false;
 
-    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
+    const matchesCommonFilters = (item: any, isProduct: boolean) => {
+      if (!isItemActive(item)) return false;
 
-    while (heightLeft >= 0) {
+      const itemName = String(item.name || '').toLowerCase();
+      const itemId = String(item.id || '').toLowerCase();
+      const itemCategory = isProduct ? item.category_name : item.category;
+      const quantity = Number(item.quantity || 0);
+      const status = String(item.status || '');
+
+      if (normalizedSearch && !itemName.includes(normalizedSearch) && !itemId.includes(normalizedSearch)) {
+        return false;
+      }
+
+      if (category !== 'All Categories' && itemCategory !== category) {
+        return false;
+      }
+
+      if (stockStatus === 'Low Stock') {
+        return quantity > 0 && quantity < 10;
+      }
+
+      if (stockStatus === 'In Stock') {
+        return quantity >= 10;
+      }
+
+      if (stockStatus === 'Out of Stock') {
+        return quantity === 0 || status === 'out_of_stock';
+      }
+
+      return true;
+    };
+
+    const sortItems = (list: any[]) => {
+      if (sortBy === 'Name A-Z') return [...list].sort((a, b) => a.name.localeCompare(b.name));
+      if (sortBy === 'Name Z-A') return [...list].sort((a, b) => b.name.localeCompare(a.name));
+      if (sortBy === 'Stock Low-High') return [...list].sort((a, b) => Number(a.quantity || 0) - Number(b.quantity || 0));
+      if (sortBy === 'Stock High-Low') return [...list].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0));
+      return list;
+    };
+
+    const exportProducts = sortItems(products.filter((item) => matchesCommonFilters(item, true)));
+    const exportIngredients = sortItems(ingredients.filter((item) => matchesCommonFilters(item, false)));
+
+    pdf.setFontSize(18);
+    pdf.setTextColor(0, 100, 0);
+    pdf.text('BakeryOS - Current Stock Report', margin, currentY);
+    currentY += 8;
+
+    pdf.setFontSize(10);
+    pdf.setTextColor(90, 90, 90);
+    pdf.text(
+      `Generated: ${new Date().toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })}`,
+      margin,
+      currentY
+    );
+    currentY += 10;
+
+    pdf.setFontSize(12);
+    pdf.setTextColor(0, 100, 0);
+    pdf.text('Products In Stock', margin, currentY);
+    currentY += 4;
+
+    const productRows = exportProducts.map((item) => [
+      item.id,
+      item.name,
+      item.category_name || 'N/A',
+      `Rs. ${Number(item.selling_price || 0).toLocaleString()}`,
+      `Rs. ${Number(item.cost_price || 0).toLocaleString()}`,
+      Number(item.quantity || 0).toLocaleString(),
+    ]);
+
+    autoTable(pdf, {
+      startY: currentY,
+      head: [['Item ID', 'Item Name', 'Category', 'Price', 'Cost', 'Quantity']],
+      body: productRows.length > 0 ? productRows : [['-', 'No products found for current filters', '-', '-', '-', '-']],
+      headStyles: {
+        fillColor: [0, 100, 0],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+      },
+      bodyStyles: {
+        textColor: [40, 40, 40],
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    currentY = ((pdf as any).lastAutoTable?.finalY || currentY) + 10;
+    if (currentY > 260) {
       pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, -heightLeft, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      currentY = 16;
     }
 
-    pdf.save(`${activeTab.toLowerCase()}-stock-report.pdf`);
+    pdf.setFontSize(12);
+    pdf.setTextColor(0, 100, 0);
+    pdf.text('Ingredients In Stock', margin, currentY);
+    currentY += 4;
+
+    const ingredientRows = exportIngredients.map((item: any) => {
+      const ingredientCost = item.cost_price ?? item.unit_cost ?? item.cost_per_unit;
+      return [
+        item.id,
+        item.name,
+        item.category || 'N/A',
+        item.unit || 'N/A',
+        ingredientCost !== undefined && ingredientCost !== null
+          ? `Rs. ${Number(ingredientCost).toLocaleString()}`
+          : 'N/A',
+        Number(item.quantity || 0).toLocaleString(),
+      ];
+    });
+
+    autoTable(pdf, {
+      startY: currentY,
+      head: [['Item ID', 'Item Name', 'Category', 'Unit', 'Cost', 'Quantity']],
+      body: ingredientRows.length > 0 ? ingredientRows : [['-', 'No ingredients found for current filters', '-', '-', '-', '-']],
+      headStyles: {
+        fillColor: [0, 100, 0],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+      },
+      bodyStyles: {
+        textColor: [40, 40, 40],
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    pdf.save(`current-stock-report-${timestamp}.pdf`);
+  };
+
+  const exportToExcel = async () => {
+    try {
+      setIsExportingExcel(true);
+      const { blob, fileName } = await apiClient.batches.exportExcel();
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('[StockManagementScreen] Error exporting Excel:', error);
+      alert('Failed to export Excel');
+    } finally {
+      setIsExportingExcel(false);
+    }
   };
 
   return (
     <div className="flex h-screen bg-[#FFF7F0]">
       {/* Main Content */}
       <div className="flex-1 flex flex-col relative overflow-hidden">
+
+        {expiryToast.visible && (
+          <div className="fixed top-6 right-6 z-[80] w-[460px] max-w-[calc(100vw-3rem)]">
+            <div className={`rounded-xl border bg-white px-4 py-3 shadow-2xl ${
+              expiryToast.type === 'success'
+                ? 'border-green-300'
+                : 'border-red-300'
+            }`}>
+              <div className={`text-sm font-semibold ${
+                expiryToast.type === 'success' ? 'text-green-700' : 'text-red-700'
+              }`}>
+                {expiryToast.type === 'success' ? 'Expiry Check Completed' : 'Expiry Check Failed'}
+              </div>
+              <div className="mt-1 text-sm text-slate-800 whitespace-pre-wrap break-words">
+                {expiryToast.message}
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Top Section: Header and Tabs */}
         <div className="px-8 pt-8 pb-4 bg-white shadow-sm">
@@ -471,9 +732,34 @@ const StockManagementScreen: React.FC = () => {
             <RotateCcw className="w-3 h-3" /> Reset Filters
           </button>
 
-          <button onClick={exportToPDF} className="ml-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-bold shadow hover:bg-orange-600 flex items-center gap-2 transition-colors">
-            Export PDF
-          </button>
+          {isManager && (
+            <>
+              <button onClick={exportToPDF} className="ml-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-bold shadow hover:bg-orange-600 flex items-center gap-2 transition-colors">
+                Export PDF
+              </button>
+
+              <button
+                onClick={exportToExcel}
+                disabled={isExportingExcel}
+                style={{ backgroundColor: '#16a34a', color: '#ffffff', borderColor: '#15803d' }}
+                className="px-4 py-2 rounded-lg font-bold shadow-md hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 transition-opacity border"
+              >
+                {isExportingExcel ? <Loader className="w-4 h-4 animate-spin" /> : null}
+                <span style={{ color: '#ffffff' }}>Export Excel</span>
+              </button>
+            </>
+          )}
+
+          {(isManager || user?.is_superuser) && (
+            <button
+              onClick={handleRunExpiryCheck}
+              disabled={isRunningExpiryCheck}
+              className="ml-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 bg-white font-semibold hover:bg-slate-50 flex items-center gap-2 transition-colors disabled:opacity-60"
+            >
+              {isRunningExpiryCheck ? <Loader className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {isRunningExpiryCheck ? 'Running Expiry Check...' : 'Run Expiry Check'}
+            </button>
+          )}
         </div>
 
         {/* Products Data Table */}
@@ -564,12 +850,20 @@ const StockManagementScreen: React.FC = () => {
                   <td className="py-3 px-4">
                     {p.is_active === false ? (
                       <span className="px-2 py-1 rounded bg-gray-200 text-gray-600 font-semibold text-xs">Inactive</span>
-                    ) : p.current_stock === 0 ? (
+                    ) : p.quantity === 0 || p.status === 'out_of_stock' ? (
                       <span className="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold text-xs">Out of Stock</span>
-                    ) : p.current_stock < 10 ? (
-                      <span className="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold text-xs">{p.current_stock}{activeTab === "Ingredients" ? ` ${p.unit}` : ''}</span>
+                    ) : p.quantity < 10 || p.status === 'low_stock' ? (
+                      <span className="px-2 py-1 rounded bg-orange-100 text-orange-700 font-semibold text-xs">
+                        {activeTab === "Ingredients"
+                          ? formatQuantityForDisplay(p.quantity, p.trackingType || 'Weight')
+                          : p.quantity}
+                      </span>
                     ) : (
-                      <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-semibold text-xs">{p.current_stock}{activeTab === "Ingredients" ? ` ${p.unit}` : ''}</span>
+                      <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-semibold text-xs">
+                        {activeTab === "Ingredients"
+                          ? formatQuantityForDisplay(p.quantity, p.trackingType || 'Weight')
+                          : p.quantity}
+                      </span>
                     )}
                   </td>
                   
@@ -614,7 +908,7 @@ const StockManagementScreen: React.FC = () => {
                         className="p-2 rounded hover:bg-orange-100 text-orange-500"
                         onClick={() => {
                           if (activeTab === "Products") {
-                            setStockHistoryModal({ open: true, itemName: p.name, itemId: p.id });
+                            setStockHistoryModal({ open: true, itemName: p.name, itemId: p.id, productApiId: p.apiId });
                           } else {
                             setIngredientStockHistoryModal({ open: true, ingredient: p });
                           }
@@ -654,7 +948,13 @@ const StockManagementScreen: React.FC = () => {
                     {/* 4. INGREDIENTS EDIT/DELETE: Only Manager OR Storekeeper (Hide for inactive) */}
                     {activeTab === "Ingredients" && (isManager || isStorekeeper) && p.is_active !== false && (
                       <>
-                        <button title="Edit" className="p-2 rounded hover:bg-orange-100 text-orange-500">
+                        <button 
+                          title="Edit" 
+                          className="p-2 rounded hover:bg-orange-100 text-orange-500"
+                          onClick={() => {
+                            setEditIngredientModal({ open: true, ingredient: p });
+                          }}
+                        >
                            <Edit className="w-[18px] h-[18px]" />
                         </button>
                         <button 
@@ -837,7 +1137,7 @@ const StockManagementScreen: React.FC = () => {
           onItemAdded={handleProductAdded}
           productCategories={productCategories}
           ingredients={ingredients.map(ing => ({
-            id: Number(ing.id),  // Convert string or number ID to actual number
+            id: ing.apiId,  // Use numeric DB ID directly (prevents NaN from display IDs like #I001)
             name: ing.name,
             base_unit: ing.unit,
           }))}
@@ -854,6 +1154,7 @@ const StockManagementScreen: React.FC = () => {
       <EditProductItemModal
         isOpen={editProductModal.open}
         onClose={() => setEditProductModal({ open: false, item: null })}
+        onSuccess={handleProductAdded}
         itemToEdit={editProductModal.item}
       />
       <ItemStockHistoryModal
@@ -861,11 +1162,20 @@ const StockManagementScreen: React.FC = () => {
         onClose={() => setStockHistoryModal({ open: false })}
         itemName={stockHistoryModal.itemName}
         itemId={stockHistoryModal.itemId}
+        productApiId={stockHistoryModal.productApiId}
+        onStockUpdated={handleProductAdded}
       />
       <IngredientStockHistoryModal
         isOpen={ingredientStockHistoryModal.open && activeTab === "Ingredients"}
         onClose={() => setIngredientStockHistoryModal({ open: false, ingredient: null })}
         ingredient={ingredientStockHistoryModal.ingredient}
+        onStockUpdated={handleIngredientAdded}
+      />
+      <EditIngredientItemModal
+        isOpen={editIngredientModal.open}
+        onClose={() => setEditIngredientModal({ open: false, ingredient: null })}
+        onSuccess={handleIngredientAdded}
+        ingredient={editIngredientModal.ingredient}
       />
       <ViewProductModal
         isOpen={!!viewItem && activeTab === "Products"}

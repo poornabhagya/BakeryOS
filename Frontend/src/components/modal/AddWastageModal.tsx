@@ -1,7 +1,8 @@
 
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { AlertTriangle, X } from 'lucide-react';
+import apiClient from '../../services/api';
 
 
 interface AddWastageModalProps {
@@ -19,17 +20,15 @@ interface AddWastageModalProps {
     quantity: number;
     reason: string;
     note?: string;
-  }) => void;
+  }) => Promise<void> | void;
 }
 
-const REASONS = [
-  "Expired",
-  "Damaged / Broken",
-  "Spoiled / Quality Issue",
-  "Spillage",
-  "Theft / Missing",
-  "Other",
-];
+interface WastageReason {
+  id: number;
+  reason: string;
+  reason_id: string;
+  description?: string;
+}
 
 export const AddWastageModal: React.FC<AddWastageModalProps> = ({
   isOpen,
@@ -38,30 +37,73 @@ export const AddWastageModal: React.FC<AddWastageModalProps> = ({
   onConfirm,
 }) => {
   const [quantity, setQuantity] = useState<number | "">("");
-  const [reason, setReason] = useState(REASONS[0]);
+  const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [touched, setTouched] = useState(false);
+  
+  // State for fetching wastage reasons
+  const [wastageReasons, setWastageReasons] = useState<WastageReason[]>([]);
+  const [loadingReasons, setLoadingReasons] = useState(false);
+  const [errorReasons, setErrorReasons] = useState<string | null>(null);
+
+  // Fetch wastage reasons when modal opens
+  useEffect(() => {
+    if (isOpen && wastageReasons.length === 0) {
+      fetchWastageReasons();
+    }
+  }, [isOpen]);
+
+  const fetchWastageReasons = async () => {
+    try {
+      setLoadingReasons(true);
+      setErrorReasons(null);
+      const reasons = await apiClient.wastageReason.getAll();
+      const manualReasons = (reasons || []).filter(
+        (r: WastageReason) => String(r.reason || '').trim().toLowerCase() !== 'expired'
+      );
+      
+      if (manualReasons.length > 0) {
+        setWastageReasons(manualReasons);
+        // Set the first reason as default
+        setReason(manualReasons[0].reason);
+      } else {
+        setWastageReasons([]);
+        setErrorReasons("No manual wastage reasons available");
+      }
+    } catch (error) {
+      console.error('Failed to fetch wastage reasons:', error);
+      setErrorReasons("Failed to load wastage reasons");
+    } finally {
+      setLoadingReasons(false);
+    }
+  };
 
   const qtyInvalid =
     quantity === "" ||
     quantity <= 0 ||
     (typeof quantity === "number" && quantity > batchData.currentQty);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched(true);
     if (!qtyInvalid && typeof quantity === "number") {
-      onConfirm({
-        batchID: batchData.batchID,
-        quantity,
-        reason,
-        note: note.trim() ? note : undefined,
-      });
-      setQuantity("");
-      setReason(REASONS[0]);
-      setNote("");
-      setTouched(false);
-      onClose();
+      try {
+        await onConfirm({
+          batchID: batchData.batchID,
+          quantity,
+          reason,
+          note: note.trim() ? note : undefined,
+        });
+
+        setQuantity("");
+        setReason(wastageReasons.length > 0 ? wastageReasons[0].reason : "");
+        setNote("");
+        setTouched(false);
+        onClose();
+      } catch (error) {
+        // Parent handles user-facing error message; keep modal open for correction/retry.
+        console.error('Failed to confirm wastage:', error);
+      }
     }
   };
 
@@ -137,16 +179,35 @@ export const AddWastageModal: React.FC<AddWastageModalProps> = ({
           {/* Reason */}
           <div>
             <label className="block font-medium text-gray-700 mb-1">Reason</label>
-            <select
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-900 bg-white"
-              required
-            >
-              {REASONS.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
+            
+            {loadingReasons ? (
+              <div className="w-full px-3 py-2 border border-gray-300 rounded text-gray-500 bg-gray-50">
+                Loading reasons...
+              </div>
+            ) : errorReasons ? (
+              <div className="flex items-center gap-2 w-full px-3 py-2 border border-red-300 rounded bg-red-50 text-red-600 text-sm">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                {errorReasons}
+              </div>
+            ) : (
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-900 bg-white"
+                required
+                disabled={wastageReasons.length === 0}
+              >
+                {wastageReasons.length === 0 ? (
+                  <option>No reasons available</option>
+                ) : (
+                  wastageReasons.map((r) => (
+                    <option key={r.id} value={r.reason}>
+                      {r.reason}
+                    </option>
+                  ))
+                )}
+              </select>
+            )}
           </div>
           {/* Note */}
           <div>

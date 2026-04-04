@@ -179,7 +179,8 @@ def setup_notification_signals():
             return
         
         if instance.expire_date:
-            days_until_expiry = (instance.expire_date - timezone.now().date()).days
+            expire_date = instance.expire_date.date() if hasattr(instance.expire_date, 'date') else instance.expire_date
+            days_until_expiry = (expire_date - timezone.now().date()).days
             
             if days_until_expiry <= 2:
                 # Create notification for storekeeper and manager
