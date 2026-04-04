@@ -185,7 +185,7 @@ class SaleCreateSerializer(serializers.Serializer):
         return value
     
     def create(self, validated_data):
-        """Create sale with items and handle stock deduction"""
+        """Create sale and deduct stock exclusively from Product.current_stock."""
         from api.models import Sale, SaleItem
         
         # Get cashier from request or validated data
@@ -232,6 +232,13 @@ class SaleCreateSerializer(serializers.Serializer):
             product = item_data['product_id']
             quantity = item_data['quantity']
             unit_price = item_data['unit_price']
+
+            # Enforce running-balance source of truth from Product.current_stock only.
+            qty_before = product.current_stock
+            if qty_before < quantity:
+                raise serializers.ValidationError(
+                    f"Insufficient stock for {product.name}. Available: {qty_before}, requested: {quantity}"
+                )
             
             # Create sale item
             SaleItem.objects.create(
@@ -243,15 +250,15 @@ class SaleCreateSerializer(serializers.Serializer):
             )
             
             # Deduct from product stock
-            product.current_stock -= quantity
-            product.save()
+            product.current_stock = qty_before - quantity
+            product.save(update_fields=['current_stock', 'updated_at'])
             
             # Create stock history entry
             from api.models import ProductStockHistory
             ProductStockHistory.objects.create(
                 product_id=product,
                 transaction_type='UseStock',
-                qty_before=product.current_stock + quantity,
+                qty_before=qty_before,
                 qty_after=product.current_stock,
                 change_amount=-quantity,
                 user_id=validated_data['cashier_id'],

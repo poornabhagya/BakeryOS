@@ -63,6 +63,14 @@ class ProductBatch(models.Model):
         help_text="Total quantity produced in this batch"
     )
     
+    current_qty = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        default=Decimal('0'),
+        help_text="Current quantity remaining in batch (tracks consumption/usage)"
+    )
+    
     made_date = models.DateField(
         help_text="Date when batch was produced"
     )
@@ -132,12 +140,17 @@ class ProductBatch(models.Model):
         Auto-generate batch_id and calculate expire_date if not already set.
         
         When creating a new batch:
-        1. Generate batch_id (PROD-BATCH-1001, etc.)
-        2. Calculate expire_date from product.shelf_life
-        3. Add quantity to product.current_stock
-        4. Create ProductStockHistory entry
+        1. Initialize current_qty = quantity (for stock tracking) - FIRST PRIORITY
+        2. Generate batch_id (PROD-BATCH-1001, etc.)
+        3. Calculate expire_date from product.shelf_life
+        4. Add quantity to product.current_stock
+        5. Create ProductStockHistory entry
         """
+        # CRITICAL: Initialize current_qty at the VERY BEGINNING before any other logic
+        # This must happen before super().save() is called
         is_new = not self.pk
+        if is_new and not self.current_qty:
+            self.current_qty = self.quantity
         
         # Auto-generate batch_id
         if not self.batch_id:

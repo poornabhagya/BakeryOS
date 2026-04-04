@@ -1,73 +1,68 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
-import { Package, Monitor, Lock, MoreVertical, Clock, Check, Trash2, Loader } from 'lucide-react';
+import { Package, Monitor, Lock, MoreVertical, Clock, Check, Trash2, Loader, FileText, FileSpreadsheet } from 'lucide-react';
 import apiClient from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 interface Notification {
-  id: string;
+  id: string | number;
   type: string; // Backend types: LowStock, Expiry, HighWastage, OutOfStock, System, Warning, etc.
   title: string;
-  description: string;
-  time: string;
+  message: string;
+  created_at: string;
   read: boolean;
   status: 'unread' | 'read' | 'snoozed' | 'archived';
 }
 
 export function NotificationScreen() {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('all');
-  const [showSimulatedDropdown, setShowSimulatedDropdown] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [toast, setToast] = useState<{ visible: boolean; type: 'success' | 'error'; message: string }>({
+    visible: false,
+    type: 'success',
+    message: '',
+  });
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setFetchError(null);
+      const items = await apiClient.notifications.getAll();
+      const notificationsWithStatus: Notification[] = items.map((notification: any) => {
+        const isRead = notification.is_read ?? notification.read ?? false;
+        return {
+          id: notification.id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message ?? notification.description ?? '',
+          created_at: notification.created_at ?? notification.time ?? '',
+          read: isRead,
+          status: notification.status || (isRead ? 'read' : 'unread'),
+        };
+      });
+      setNotifications(notificationsWithStatus);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to fetch notifications';
+      setFetchError(errorMsg);
+      console.error('Error fetching notifications:', error);
+      // Fall back to empty array on error
+      setNotifications([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   // --- Fetch Notifications from API ---
   useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        setIsLoading(true);
-        setFetchError(null);
-        const items = await apiClient.notifications.getAll();
-        // items is already a flat array of UI-formatted notifications
-        // Map to include status field if not present
-        const notificationsWithStatus = items.map((notification: any) => ({
-          ...notification,
-          status: notification.status || (notification.read ? 'read' : 'unread') as 'unread' | 'read' | 'snoozed',
-        }));
-        setNotifications(notificationsWithStatus);
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Failed to fetch notifications';
-        setFetchError(errorMsg);
-        console.error('Error fetching notifications:', error);
-        // Fall back to empty array on error
-        setNotifications([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchNotifications();
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowSimulatedDropdown(false);
-      }
-    };
-
-    if (showSimulatedDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showSimulatedDropdown]);
+  }, [fetchNotifications]);
 
   const getNotificationTypeLabel = (type: string): string => {
     switch (type) {
@@ -122,7 +117,7 @@ export function NotificationScreen() {
       return true;
     });
 
-  const markAsRead = async (id: string) => {
+  const markAsRead = async (id: string | number) => {
     try {
       console.log(`[NotificationScreen] Marking notification ${id} as read`);
       
@@ -141,7 +136,7 @@ export function NotificationScreen() {
     }
   };
 
-  const snoozeNotification = async (id: string) => {
+  const snoozeNotification = async (id: string | number) => {
     try {
       console.log(`[NotificationScreen] Snoozing notification ${id}`);
       
@@ -151,7 +146,7 @@ export function NotificationScreen() {
       ));
 
       // Make API PATCH request
-      await apiClient.notifications.update(id, { status: 'snooze' });
+      await apiClient.notifications.update(String(id), { status: 'snoozed' });
       
       console.log(`[NotificationScreen] Notification ${id} snoozed successfully`);
     } catch (error) {
@@ -160,7 +155,7 @@ export function NotificationScreen() {
     }
   };
 
-  const deleteNotification = async (id: string) => {
+  const deleteNotification = async (id: string | number) => {
     try {
       console.log(`[NotificationScreen] Archiving notification ${id}`);
       
@@ -170,7 +165,7 @@ export function NotificationScreen() {
       ));
 
       // Make API PATCH request
-      await apiClient.notifications.update(id, { status: 'archived' });
+      await apiClient.notifications.update(String(id), { status: 'archived' });
       
       console.log(`[NotificationScreen] Notification ${id} archived successfully`);
     } catch (error) {
@@ -179,8 +174,58 @@ export function NotificationScreen() {
     }
   };
 
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ visible: true, type, message });
+    setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 5000);
+  };
+
+  const handleCounterReportExport = async (notification: Notification, format: 'pdf' | 'excel') => {
+    try {
+      const download = format === 'pdf'
+        ? apiClient.notifications.downloadCounterReportPdf
+        : apiClient.notifications.downloadCounterReportExcel;
+
+      const { blob, fileName } = await download(notification.id);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+
+      // Backend marks this notification as read; refresh list to reflect dimmed/read state.
+      await fetchNotifications();
+
+      showToast(
+        format === 'pdf'
+          ? 'Shift report PDF downloaded successfully.'
+          : 'Shift report Excel downloaded successfully.',
+        'success'
+      );
+    } catch (error: any) {
+      showToast(
+        error?.message || (format === 'pdf' ? 'Failed to download shift report PDF.' : 'Failed to download shift report Excel.'),
+        'error'
+      );
+    }
+  };
+
   return (
     <div className="p-8">
+      {toast.visible && (
+        <div className="fixed top-6 right-6 z-[80] w-[420px] max-w-[calc(100vw-3rem)]">
+          <div className={`rounded-xl border bg-white px-4 py-3 shadow-2xl ${
+            toast.type === 'success' ? 'border-green-300' : 'border-red-300'
+          }`}>
+            <div className={`text-sm font-semibold ${toast.type === 'success' ? 'text-green-700' : 'text-red-700'}`}>
+              {toast.type === 'success' ? 'Done' : 'Access Restricted'}
+            </div>
+            <div className="mt-1 text-sm text-slate-800">{toast.message}</div>
+          </div>
+        </div>
+      )}
       <Card className="p-6">
         {/* Header Section */}
         <div className="flex items-center justify-between mb-8">
@@ -268,10 +313,12 @@ export function NotificationScreen() {
                 <p className="text-gray-600">You're all caught up!</p>
               </div>
             ) : (
-              filteredNotifications.map((notification, index) => {
+              filteredNotifications.map((notification) => {
                 const Icon = getIcon(notification.type);
                 const iconColor = getIconColor(notification.type);
-                const isFirst = index === 0 && notification.type === 'critical'; // For the dropdown simulation
+                const isSystemNotification = notification.type === 'System';
+                const isCounterStatusNotification = notification.type === 'System' && notification.title === 'Counter Status Update';
+                const isManager = user?.role === 'Manager';
 
                 return (
                   <Card 
@@ -295,11 +342,13 @@ export function NotificationScreen() {
                             <h3 className={`font-semibold text-gray-900 mb-1 ${!notification.read ? 'text-orange-900' : ''}`}>
                               {notification.title}
                             </h3>
-                            <p className="text-gray-600 text-sm leading-relaxed mb-2">
-                              {notification.description}
+                            <p className="text-gray-600 text-sm leading-relaxed mb-2 whitespace-pre-wrap">
+                              {notification.message}
                             </p>
                             <div className="flex items-center gap-2">
-                              <span className="text-gray-400 text-xs">{notification.time}</span>
+                              <span className="text-gray-400 text-xs">
+                                {notification.created_at ? new Date(notification.created_at).toLocaleString() : ''}
+                              </span>
                               {!notification.read && (
                                 <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5">
                                   New
@@ -328,83 +377,56 @@ export function NotificationScreen() {
                             </div>
                           </div>
 
-                          {/* Three-dot Menu - Only show for alert notifications */}
-                          {categorizeNotification(notification.type) === 'Alert' && (
-                            <div className="relative flex-shrink-0">
-                              {isFirst ? (
-                                // For first notification, show simulated dropdown
-                                <div ref={dropdownRef}>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon"
-                                    className="h-8 w-8 hover:bg-gray-100"
-                                    onClick={() => setShowSimulatedDropdown(!showSimulatedDropdown)}
-                                  >
-                                    <MoreVertical className="w-4 h-4" />
-                                  </Button>
-                                  {showSimulatedDropdown && (
-                                    <div className="absolute right-0 top-8 z-50 w-48 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
-                                      <button 
-                                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-900 transition-colors"
-                                        onClick={() => {
-                                          snoozeNotification(notification.id);
-                                          setShowSimulatedDropdown(false);
-                                        }}
-                                      >
-                                        <Clock className="w-4 h-4 text-gray-500" />
-                                        <span>Snooze (1 Hour)</span>
-                                      </button>
-                                      <div className="border-t border-gray-100"></div>
-                                      <button 
-                                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-800 transition-colors"
-                                        onClick={() => {
-                                          markAsRead(notification.id);
-                                          setShowSimulatedDropdown(false);
-                                        }}
-                                      >
-                                        <Check className="w-4 h-4 text-green-600" />
-                                        <span>Mark as Read</span>
-                                      </button>
-                                      <div className="border-t border-gray-100"></div>
-                                      <button 
-                                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors"
-                                        onClick={() => {
-                                          deleteNotification(notification.id);
-                                          setShowSimulatedDropdown(false);
-                                        }}
-                                      >
-                                        <Trash2 className="w-4 h-4 text-red-600" />
-                                        <span>Delete</span>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                // For other notifications, show real dropdown
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-                                      <MoreVertical className="w-4 h-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-48 bg-white border-gray-200">
-                                    <DropdownMenuItem onClick={() => snoozeNotification(notification.id)}>
-                                      <Clock className="w-4 h-4 mr-2" />
-                                      Snooze (1 Hour)
-                                    </DropdownMenuItem>
+                          {/* Three-dot Menu - available for all notifications. */}
+                          <div className="relative flex-shrink-0">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-gray-100"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-48 bg-white border-gray-200"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {!isSystemNotification && (
+                                  <DropdownMenuItem onClick={() => snoozeNotification(notification.id)}>
+                                    <Clock className="w-4 h-4 mr-2" />
+                                    Snooze (1 Hour)
+                                  </DropdownMenuItem>
+                                )}
+                                  {isCounterStatusNotification && isManager ? (
+                                    <>
+                                      <DropdownMenuItem onClick={() => handleCounterReportExport(notification, 'pdf')}>
+                                        <FileText className="w-4 h-4 mr-2" />
+                                        Export PDF
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleCounterReportExport(notification, 'excel')}>
+                                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                                        Export Excel
+                                      </DropdownMenuItem>
+                                    </>
+                                  ) : (
                                     <DropdownMenuItem onClick={() => markAsRead(notification.id)}>
                                       <Check className="w-4 h-4 mr-2" />
                                       Mark as Read
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => deleteNotification(notification.id)} className="text-red-600">
-                                      <Trash2 className="w-4 h-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
-                            </div>
-                          )}
+                                  )}
+                                {!isSystemNotification && (
+                                  <DropdownMenuItem onClick={() => deleteNotification(notification.id)} className="text-red-600">
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       </div>
                     </div>

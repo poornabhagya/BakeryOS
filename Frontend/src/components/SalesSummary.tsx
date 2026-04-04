@@ -8,6 +8,7 @@ import { toNumber } from '../utils/numericUtils';
 import apiClient from '../services/api';
 import { convertApiSaleToUi } from '../utils/conversions';
 import { ViewSaleModal } from './modal/ViewSaleModal';
+import { useAuth } from '../context/AuthContext';
 
 type SaleItem = {
   id: number;
@@ -36,6 +37,9 @@ type Sale = {
 };
 
 export function SalesSummary() {
+  const { user } = useAuth();
+  const isManager = user?.role === 'Manager';
+
   // --- State: API Data ---
   const [sales, setSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,6 +78,7 @@ export function SalesSummary() {
   // --- State: Modal & Reprint ---
   const [viewSaleModal, setViewSaleModal] = useState<{ open: boolean; sale: Sale | null }>({ open: false, sale: null });
   const [isLoadingSaleDetail, setIsLoadingSaleDetail] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
 
   const filtered = useMemo(() => {
     // Filter from REAL sales data, not mock
@@ -282,6 +287,32 @@ export function SalesSummary() {
     } catch (error) {
       console.error('[SalesSummary] Error exporting PDF:', error);
       alert('Failed to export PDF');
+    }
+  };
+
+  const exportToExcel = async () => {
+    try {
+      setIsExportingExcel(true);
+      const { blob, fileName } = await apiClient.sales.exportExcel({
+        start_date: dateFrom,
+        end_date: dateTo,
+        search: searchId.trim(),
+        amount_filter: amountFilter,
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('[SalesSummary] Error exporting Excel:', error);
+      alert('Failed to export Excel');
+    } finally {
+      setIsExportingExcel(false);
     }
   };
 
@@ -589,14 +620,28 @@ export function SalesSummary() {
           <option value="High">High Value Bills (&gt; Rs. 1000)</option>
         </select>
 
-        <div className="ml-auto flex items-center gap-3">
-          <button onClick={resetFilters} className="text-red-500 hover:text-red-700 flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-4">
+          <button onClick={resetFilters} className="text-gray-500 hover:text-gray-700 flex items-center gap-2 font-medium">
             <RotateCcw className="w-4 h-4" /> Reset
           </button>
 
-          <button onClick={exportToPDF} className="px-4 py-2 rounded-lg bg-green-500 text-white font-bold shadow hover:bg-green-600 flex items-center gap-2 transition-colors">
-            Export PDF
-          </button>
+          {isManager && (
+            <>
+              <button onClick={exportToPDF} className="px-4 py-2 rounded-lg bg-red-600 text-white font-bold shadow-md hover:bg-red-700 flex items-center gap-2 transition-colors border border-red-700">
+                Export PDF
+              </button>
+
+              <button
+                onClick={exportToExcel}
+                disabled={isExportingExcel}
+                style={{ backgroundColor: '#16a34a', color: '#ffffff', borderColor: '#15803d' }}
+                className="px-4 py-2 rounded-lg font-bold shadow-md hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 transition-opacity border"
+              >
+                {isExportingExcel ? <Loader className="w-4 h-4 animate-spin" /> : null}
+                <span style={{ color: '#ffffff' }}>Export Excel</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 

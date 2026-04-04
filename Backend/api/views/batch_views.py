@@ -2,6 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.http import HttpResponse
+from django.core.management import call_command
+from io import StringIO
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import F, Q
 from django.utils import timezone
@@ -9,7 +12,7 @@ from datetime import timedelta
 # from django_filters.rest_framework import DjangoFilterBackend  # Disabled due to compatibility
 from rest_framework.filters import SearchFilter, OrderingFilter
 
-from api.models import IngredientBatch, Ingredient
+from api.models import IngredientBatch, Ingredient, Product, Notification, NotificationReceipt, User
 from api.serializers import (
     BatchListSerializer,
     BatchDetailSerializer,
@@ -74,15 +77,15 @@ class BatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
     # Query optimization profiles
     optimized_relations = {
         'list': {
-            'select_related': ['ingredient'],
+            'select_related': ['ingredient_id'],
             'prefetch_related': [],
         },
         'retrieve': {
-            'select_related': ['ingredient'],
+            'select_related': ['ingredient_id'],
             'prefetch_related': ['stock_history'],
         },
         'expiring': {
-            'select_related': ['ingredient'],
+            'select_related': ['ingredient_id'],
             'prefetch_related': [],
         }
     }
@@ -114,7 +117,9 @@ class BatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         - create/update/delete: Storekeeper OR Manager (write operations)
         - consume: Storekeeper OR Manager (for stock deduction)
         """
-        if self.action in ['list', 'retrieve', 'by_ingredient', 'expiring']:
+        if self.action == 'run_expiry_check':
+            self.permission_classes = [IsManager]
+        elif self.action in ['list', 'retrieve', 'by_ingredient', 'expiring', 'export_excel']:
             # All authenticated users can view batches
             self.permission_classes = [IsManagerOrStorekeeperOrBaker]
         elif self.action in ['create', 'update', 'partial_update', 'destroy', 'consume']:
@@ -123,18 +128,61 @@ class BatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         else:
             self.permission_classes = [IsAuthenticated]
         return [permission() for permission in self.permission_classes]
+
+    def get_queryset(self):
+        """Return filtered queryset for list and related actions."""
+        queryset = super().get_queryset()
+
+        ingredient_id = self.request.query_params.get('ingredient_id')
+        if ingredient_id:
+            queryset = queryset.filter(ingredient_id=ingredient_id)
+
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        return queryset
+
+    def _create_system_audit_notification(self, message: str):
+        """Create system-wide audit notification and unread receipts for active users."""
+        notification = Notification.objects.create(
+            title='System Audit Trail',
+            message=message,
+            type='System',
+            icon='info'
+        )
+
+        active_users = User.objects.filter(
+            is_active=True,
+            role__in=['Manager', 'Cashier', 'Baker', 'Storekeeper']
+        )
+
+        NotificationReceipt.objects.bulk_create([
+            NotificationReceipt(notification=notification, user=user, status='unread', is_read=False)
+            for user in active_users
+        ])
     
     def perform_create(self, serializer):
-        """Create new batch and trigger ingredient quantity sync"""
+        """Create new ingredient batch and emit system-wide audit notification."""
         serializer.save()
+        batch = serializer.instance
+        message = f"{self.request.user.username} added new stock: {batch.quantity} of {batch.ingredient_id.name}"
+        self._create_system_audit_notification(message)
     
     def perform_update(self, serializer):
-        """Update batch and trigger ingredient quantity sync"""
+        """Update ingredient batch and emit system-wide audit notification."""
         serializer.save()
+        batch = serializer.instance
+        message = f"{self.request.user.username} updated stock batch: {batch.quantity} of {batch.ingredient_id.name}"
+        self._create_system_audit_notification(message)
     
     def perform_destroy(self, instance):
-        """Delete batch and trigger ingredient quantity sync"""
+        """Delete ingredient batch and emit system-wide audit notification."""
+        ingredient_name = instance.ingredient_id.name
+        quantity = instance.quantity
         instance.delete()
+        message = f"{self.request.user.username} deleted stock batch: {quantity} of {ingredient_name}"
+        self._create_system_audit_notification(message)
     
     @action(detail=False, methods=['get'], url_path='expiring')
     def expiring(self, request):
@@ -277,38 +325,110 @@ class BatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
             'total_available': ingredient.total_quantity,
             'results': serializer.data
         })
+
+    @action(detail=False, methods=['post'], url_path='run-expiry-check')
+    def run_expiry_check(self, request):
+        """Run the process_expirations management command on demand (manager-only)."""
+        # Extra guard for Django admin/superuser accounts.
+        if request.user.role != 'Manager' and not request.user.is_superuser:
+            return Response(
+                {'detail': 'Only Manager or Admin can run expiry check.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        out = StringIO()
+        call_command('process_expirations', stdout=out)
+        message = out.getvalue().strip()
+
+        return Response(
+            {
+                'detail': 'Success',
+                'message': message or 'Expiry check completed successfully.',
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=['get'], url_path='export-excel')
+    def export_excel(self, request):
+        """Export current stock (products + ingredients) to Excel."""
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font
+        except ImportError:
+            return Response(
+                {'detail': 'Excel generation dependency missing. Install openpyxl.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        products = Product.objects.select_related('category_id').order_by('name')
+        ingredients = Ingredient.objects.select_related('category_id').prefetch_related('batches').order_by('name')
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Current Stock'
+
+        headers = ['Item ID', 'Item Name', 'Item Type', 'Category', 'Price (Rs)', 'Cost (Rs)', 'Quantity']
+        sheet.append(headers)
+        for cell in sheet[1]:
+            cell.font = Font(bold=True)
+
+        total_price = 0.0
+        total_cost = 0.0
+
+        for product in products:
+            price_value = float(product.selling_price or 0)
+            cost_value = float(product.cost_price or 0)
+            total_price += price_value
+            total_cost += cost_value
+            sheet.append([
+                product.product_id,
+                product.name,
+                'Product',
+                product.category_id.name if product.category_id else 'N/A',
+                price_value,
+                cost_value,
+                float(product.current_stock or 0),
+            ])
+
+        for ingredient in ingredients:
+            latest_batch = ingredient.batches.filter(cost_price__isnull=False).order_by('-created_at').first()
+            ingredient_cost = float(latest_batch.cost_price) if latest_batch and latest_batch.cost_price is not None else 0.0
+            total_cost += ingredient_cost
+            sheet.append([
+                ingredient.ingredient_id,
+                ingredient.name,
+                'Ingredient',
+                ingredient.category_id.name if ingredient.category_id else 'N/A',
+                None,
+                ingredient_cost,
+                float(ingredient.total_quantity or 0),
+            ])
+
+        summary_row_idx = sheet.max_row + 1
+        sheet.append(['', '', '', 'TOTAL', total_price, total_cost, ''])
+        sheet[f'D{summary_row_idx}'].font = Font(bold=True)
+        sheet[f'E{summary_row_idx}'].font = Font(bold=True)
+        sheet[f'F{summary_row_idx}'].font = Font(bold=True)
+
+        sheet.column_dimensions['A'].width = 16
+        sheet.column_dimensions['B'].width = 28
+        sheet.column_dimensions['C'].width = 14
+        sheet.column_dimensions['D'].width = 20
+        sheet.column_dimensions['E'].width = 14
+        sheet.column_dimensions['F'].width = 14
+        sheet.column_dimensions['G'].width = 12
+
+        from io import BytesIO
+        output = BytesIO()
+        workbook.save(output)
+        excel_bytes = output.getvalue()
+        output.close()
+
+        filename = f"current_stock_report_{timezone.localtime().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        response = HttpResponse(
+            excel_bytes,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
     
-    @action(detail=False, methods=['post'], url_path='update-expiry-status')
-    def update_expiry_status(self, request):
-        """
-        Auto-update expiry status for all batches.
-        Marks batches as Expired if expire_date has passed.
-        
-        This endpoint can be called periodically or on-demand.
-        
-        Example:
-        - POST /api/batches/update-expiry-status/
-        
-        Returns:
-        {
-            "updated_count": 5,
-            "message": "Updated 5 batches",
-            "expired_batches": [...]
-        }
-        """
-        now = timezone.now()
-        updated_batches = IngredientBatch.objects.filter(
-            status='Active',
-            expire_date__lt=now
-        ).update(status='Expired')
-        
-        expired_batches = IngredientBatch.objects.filter(
-            status='Expired'
-        ).order_by('-expire_date')[:10]
-        
-        serializer = self.get_serializer(expired_batches, many=True)
-        return Response({
-            'updated_count': updated_batches,
-            'message': f'Updated {updated_batches} batches',
-            'recent_expired': serializer.data
-        })

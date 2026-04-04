@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth, UserRole } from './context/AuthContext';
 import { LoginScreen } from './components/LoginScreen';
 
 // Components
@@ -14,23 +14,93 @@ import StockManagementScreen from './components/StockManagementScreen';
 import DiscountManagement from './components/DiscountManagement';
 import { NotificationScreen } from './components/NotificationScreen';
 
+type MenuPage =
+  | 'dashboard'
+  | 'users'
+  | 'billing'
+  | 'stock'
+  | 'wastage'
+  | 'saleshistory'
+  | 'discount'
+  | 'notification';
+
+const PAGE_ACCESS: Record<UserRole, MenuPage[]> = {
+  Manager: ['dashboard', 'users', 'billing', 'stock', 'wastage', 'saleshistory', 'discount', 'notification'],
+  Cashier: ['billing', 'stock', 'wastage', 'saleshistory', 'discount', 'notification'],
+  Baker: ['dashboard', 'stock', 'wastage', 'notification'],
+  Storekeeper: ['dashboard', 'stock', 'wastage', 'notification'],
+};
+
+const ALL_MENU_PAGES: MenuPage[] = [
+  'dashboard',
+  'users',
+  'billing',
+  'stock',
+  'wastage',
+  'saleshistory',
+  'discount',
+  'notification',
+];
+
+const normalizeMenuPage = (value: string): MenuPage | null => {
+  return ALL_MENU_PAGES.includes(value as MenuPage) ? (value as MenuPage) : null;
+};
+
+const getDefaultPageForRole = (role: UserRole): MenuPage => {
+  if (role === 'Cashier') return 'billing';
+  return 'dashboard';
+};
+
+const canAccessPage = (role: UserRole, page: MenuPage): boolean => {
+  return PAGE_ACCESS[role]?.includes(page) ?? false;
+};
+
 function BakeryApp() {
   const { user } = useAuth(); 
-  const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
+  const [activeMenuItem, setActiveMenuItem] = useState<MenuPage>('dashboard');
+
+  const setActiveMenuItemIfAllowed = (page: MenuPage) => {
+    if (!user) return;
+    const role = user.role as UserRole;
+    if (canAccessPage(role, page)) {
+      setActiveMenuItem(page);
+    }
+  };
 
   // --- Smart Redirect Logic ---
   useEffect(() => {
     if (user) {
-      // යූසර් ලොග් වුන ගමන්, එයාගේ රෝල් එක අනුව මුලින්ම යන පිටුව තීරණය කිරීම
-      if (user.role === 'Cashier') {
-        setActiveMenuItem('billing'); 
-      } else if (user.role === 'Baker' || user.role === 'Storekeeper') {
-        setActiveMenuItem('stock'); 
-      } else {
-        setActiveMenuItem('dashboard'); // Manager default
-      }
+      const role = user.role as UserRole;
+      const defaultPage = getDefaultPageForRole(role);
+      setActiveMenuItem(defaultPage);
     }
   }, [user]); // Runs only when 'user' changes (login/logout)
+
+  // Enforce role guard if activeMenuItem is somehow set to an unauthorized page.
+  useEffect(() => {
+    if (!user) return;
+    const role = user.role as UserRole;
+    if (!canAccessPage(role, activeMenuItem)) {
+      setActiveMenuItem(getDefaultPageForRole(role));
+    }
+  }, [user, activeMenuItem]);
+
+  // --- Listen for navigation events from dashboard and other components ---
+  useEffect(() => {
+    const handleNavigate = (event: Event) => {
+      if (!user) return;
+      const customEvent = event as CustomEvent;
+      const requestedPage = normalizeMenuPage(String(customEvent.detail || ''));
+      if (!requestedPage) return;
+
+      setActiveMenuItemIfAllowed(requestedPage);
+    };
+
+    window.addEventListener('navigate', handleNavigate);
+    return () => {
+      window.removeEventListener('navigate', handleNavigate);
+    };
+  }, [user]);
 
   // --- 1. If NO User -> Show Login Screen ---
   if (!user) {
@@ -72,14 +142,21 @@ function BakeryApp() {
       {/* Sidebar */}
       <Sidebar 
         activeItem={activeMenuItem} 
-        onItemClick={setActiveMenuItem}
+        onItemClick={(item) => {
+          const normalized = normalizeMenuPage(item);
+          if (!normalized) return;
+          setActiveMenuItemIfAllowed(normalized);
+        }}
         // @ts-ignore
         userRole={user.role} 
       />
 
       {/* Main Content Area */}
       <div className="flex-1 ml-64 transition-all duration-300">
-        <Header breadcrumbPath={getBreadcrumb()} />
+        <Header
+          breadcrumbPath={getBreadcrumb()}
+          onNotificationClick={() => setActiveMenuItemIfAllowed('notification')}
+        />
         
         <main className="p-6">
             {renderContent()}

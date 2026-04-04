@@ -11,6 +11,7 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import apiClient from '../services/api';
 import { convertApiUserToUi } from '../utils/conversions';
+import { useAuth } from '../context/AuthContext';
 
 interface StaffMember {
   id: number;
@@ -83,6 +84,18 @@ const initialStaffMembers: StaffMember[] = [
 
 
 export function UserManagement() {
+  const { user } = useAuth();
+
+  if (user?.role !== 'Manager') {
+    return (
+      <div className="p-8">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 font-semibold">
+          Access Denied: You do not have permission to view User Management.
+        </div>
+      </div>
+    );
+  }
+
   // --- State: API Data ---
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);

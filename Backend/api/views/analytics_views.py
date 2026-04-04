@@ -12,6 +12,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.http import HttpResponse
 from django.db.models import Sum, Count, Avg, F, DecimalField, ExpressionWrapper
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from django.utils import timezone
@@ -975,6 +976,87 @@ class DashboardKpiViewSet(viewsets.ViewSet):
         from api.serializers.analytics_serializers import DashboardKpiSerializer
         serializer = DashboardKpiSerializer(result)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='export-summary-excel')
+    def export_summary_excel(self, request):
+        """Export dashboard KPI summary as Excel for the selected time filter."""
+        time_filter = (request.query_params.get('time_filter') or 'Today').strip()
+        now = timezone.localtime()
+        today = now.date()
+
+        if time_filter == 'This Week':
+            start_date = today - timedelta(days=today.weekday())
+        elif time_filter == 'This Month':
+            start_date = today.replace(day=1)
+        else:
+            time_filter = 'Today'
+            start_date = today
+
+        start_dt = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
+        end_dt = timezone.make_aware(datetime.combine(today, datetime.max.time()))
+
+        sales_qs = Sale.objects.filter(created_at__gte=start_dt, created_at__lte=end_dt)
+        total_revenue = sales_qs.aggregate(total=Sum('total_amount', default=Decimal('0')))['total'] or Decimal('0')
+        total_orders = sales_qs.count()
+
+        product_wastage_total = ProductWastage.objects.filter(
+            created_at__gte=start_dt,
+            created_at__lte=end_dt,
+        ).aggregate(total=Sum('total_loss', default=Decimal('0')))['total'] or Decimal('0')
+
+        ingredient_wastage_total = IngredientWastage.objects.filter(
+            created_at__gte=start_dt,
+            created_at__lte=end_dt,
+        ).aggregate(total=Sum('total_loss', default=Decimal('0')))['total'] or Decimal('0')
+
+        total_wastage_loss = product_wastage_total + ingredient_wastage_total
+        net_profit = total_revenue - total_wastage_loss
+
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font
+        except ImportError:
+            return Response(
+                {'detail': 'Excel generation dependency missing. Install openpyxl.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Dashboard Summary'
+
+        sheet.append(['BakeryOS - Dashboard Summary'])
+        sheet.append([f'Time Period: {time_filter}'])
+        sheet.append([f'Generated: {now.strftime("%Y-%m-%d %I:%M:%S %p")}'])
+        sheet.append([])
+
+        headers = ['KPI', 'Value']
+        sheet.append(headers)
+        header_row_idx = sheet.max_row
+        for cell in sheet[header_row_idx]:
+            cell.font = Font(bold=True)
+
+        sheet.append(['Total Revenue', float(total_revenue)])
+        sheet.append(['Total Wastage Loss', float(total_wastage_loss)])
+        sheet.append(['Net Profit', float(net_profit)])
+        sheet.append(['Total Orders', int(total_orders)])
+
+        sheet.column_dimensions['A'].width = 28
+        sheet.column_dimensions['B'].width = 20
+
+        from io import BytesIO
+        output = BytesIO()
+        workbook.save(output)
+        excel_bytes = output.getvalue()
+        output.close()
+
+        filename = f"dashboard_summary_{time_filter.lower().replace(' ', '_')}_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
+        response = HttpResponse(
+            excel_bytes,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 # ============================================================

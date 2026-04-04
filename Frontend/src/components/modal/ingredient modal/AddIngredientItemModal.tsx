@@ -108,12 +108,13 @@ export function AddIngredientItemModal({ open, onClose, onItemAdded, ingredientC
 				throw new Error('Shelf life must be a valid number');
 			}
 			
-			// Determine base_unit based on tracking_type (matches Django model)
-			let baseUnit = 'kg'; // default for Weight
+			// Determine canonical base_unit based on tracking_type
+			// Weight -> g, Volume -> ml, Count -> nos
+			let baseUnit = 'g';
 			if (trackingType === 'Volume') {
-				baseUnit = 'liters';
+				baseUnit = 'ml';
 			} else if (trackingType === 'Count') {
-				baseUnit = 'pieces';
+				baseUnit = 'nos';
 			}
 			
 			// Construct payload matching Django Ingredient serializer EXACTLY

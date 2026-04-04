@@ -1,13 +1,45 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Bell, ChevronRight, User } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useAuth } from '../context/AuthContext'; // 1. Imported the context
+import apiClient from '../services/api';
 
 interface HeaderProps {
   breadcrumbPath?: string[];
+  onNotificationClick?: () => void;
 }
 
-export function Header({ breadcrumbPath = ['Dashboard', 'Overview'] }: HeaderProps) {
+export function Header({ breadcrumbPath = ['Dashboard', 'Overview'], onNotificationClick }: HeaderProps) {
   const { user } = useAuth(); // 2. Got details of the logged-in user
+  const [unreadCount, setUnreadCount] = useState(0);
+  const displayName = user?.name || user?.username || (user as any)?.first_name || 'User';
+
+  const fetchUnreadCount = async () => {
+    try {
+      const notifications = await apiClient.notifications.getAll();
+      const unread = (notifications || []).filter((notification: any) => {
+        const isUnreadByFlag = notification?.is_read === false || notification?.read === false;
+        const status = String(notification?.status || '').toLowerCase();
+        const isUnreadByStatus = status === 'unread';
+        return isUnreadByFlag || isUnreadByStatus;
+      }).length;
+      setUnreadCount(unread);
+    } catch (error) {
+      console.error('Failed to fetch unread notifications for header:', error);
+      setUnreadCount(0);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const intervalId = window.setInterval(fetchUnreadCount, 60000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const unreadBadge = useMemo(() => {
+    if (unreadCount <= 0) return null;
+    return unreadCount > 99 ? '99+' : String(unreadCount);
+  }, [unreadCount]);
 
   // 3. Access Level Text shown below according to Role
   const getAccessLevel = (role?: string) => {
@@ -43,11 +75,18 @@ export function Header({ breadcrumbPath = ['Dashboard', 'Overview'] }: HeaderPro
       {/* Right Side: Notification & User Profile */}
       <div className="flex items-center gap-4">
         {/* Notification Bell */}
-        <button className="relative p-2 hover:bg-gray-100 rounded-full transition-colors group">
+        <button
+          onClick={onNotificationClick}
+          className="relative p-2 hover:bg-gray-100 rounded-full transition-colors group"
+          aria-label="Open notifications"
+          title="Notifications"
+        >
           <Bell className="w-5 h-5 text-gray-600 group-hover:text-orange-600 transition-colors" />
-          <Badge className="absolute top-1 right-1 bg-orange-600 text-white border-2 border-white px-1.5 py-0.5 text-[10px] min-w-[18px] h-[18px] flex items-center justify-center">
-            2
-          </Badge>
+          {unreadBadge && (
+            <Badge className="absolute top-1 right-1 bg-orange-600 text-white border-2 border-white px-1.5 py-0.5 text-[10px] min-w-[18px] h-[18px] flex items-center justify-center">
+              {unreadBadge}
+            </Badge>
+          )}
         </button>
 
         {/* User Profile */}
@@ -55,7 +94,7 @@ export function Header({ breadcrumbPath = ['Dashboard', 'Overview'] }: HeaderPro
           <div className="text-right hidden md:block">
             {/* User's Name */}
             <p className="text-sm font-bold text-gray-900 leading-none mb-1">
-              {user?.full_name || 'User'}
+              {displayName}
             </p>
             {/* Access Level corresponding to the user's role */}
             <p className="text-xs text-gray-500 font-medium">

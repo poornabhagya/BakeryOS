@@ -4,10 +4,10 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
-import { Plus, Trash, DollarSign, Clock } from 'lucide-react';
+import { Plus, Trash, DollarSign, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { categoryApi, ingredientApi, productApi } from '../../services/api';
 
 // Mock Data
-const CATEGORIES = ['Buns', 'Cakes', 'Pastries', 'Bread'];
 const INGREDIENTS = [
   { id: 'i1', name: 'Flour', unit: 'kg' },
   { id: 'i2', name: 'Sugar', unit: 'kg' },
@@ -25,8 +25,10 @@ type RecipeRow = {
 type EditProductItemModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   itemToEdit: {
-    id: string;
+    apiId: number;  // Real database primary key for API calls
+    id: string;  // Display ID like "#PROD-1048"
     name: string;
     category_name: string;
     category_id: number;
@@ -34,42 +36,105 @@ type EditProductItemModalProps = {
     shelf_unit: string;
     cost_price: number;
     selling_price: number;
-    recipe: RecipeRow[];
+    recipe?: RecipeRow[];
+    recipe_items?: Array<{
+      id?: number;
+      ingredientId?: string | number;
+      ingredient_id?: string | number;
+      qty?: string | number;
+      quantity_required?: string | number;
+      unit?: string;
+      ingredient_unit?: string;
+      ingredient_name?: string;
+    }>;
   } | null;
 };
 
 const initialRecipeRow: RecipeRow = { ingredientId: '', qty: '', unit: '' };
 
-export const EditProductItemModal: React.FC<EditProductItemModalProps> = ({ isOpen, onClose, itemToEdit }) => {
+export const EditProductItemModal: React.FC<EditProductItemModalProps> = ({ isOpen, onClose, onSuccess, itemToEdit }) => {
   const [itemId, setItemId] = useState('');
+  const [apiId, setApiId] = useState(0);  // Real database primary key
   const [itemName, setItemName] = useState('');
   const [category, setCategory] = useState('');
+  const [categories, setCategories] = useState<Array<{ id: number; name: string; type: string }>>([]);
+  const [ingredients, setIngredients] = useState<Array<{ id: string; name: string; unit: string }>>(INGREDIENTS);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
   const [shelfLife, setShelfLife] = useState('');
   const [shelfLifeUnit, setShelfLifeUnit] = useState('Days');
   const [costPrice, setCostPrice] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
   const [recipe, setRecipe] = useState<RecipeRow[]>([{ ...initialRecipeRow }]);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({ message: '', type: 'success', visible: false });
+
+  // Fetch categories on component mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setIsCategoriesLoading(true);
+        const data = await categoryApi.getProducts();
+        setCategories(Array.isArray(data) ? data : data.results || []);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        setCategories([]);
+      } finally {
+        setIsCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    const fetchIngredients = async () => {
+      try {
+        const response = await ingredientApi.getAllPages();
+        const mappedIngredients = (response?.items || []).map((ing: any) => ({
+          id: String(ing.id),
+          name: ing.name || 'Unknown',
+          unit: ing.base_unit || '',
+        }));
+
+        if (mappedIngredients.length > 0) {
+          setIngredients(mappedIngredients);
+        }
+      } catch (error) {
+        console.error('Error fetching ingredients for edit modal:', error);
+      }
+    };
+
+    fetchIngredients();
+  }, []);
 
   // Pre-fill logic
   useEffect(() => {
     if (isOpen && itemToEdit) {
+      setApiId(itemToEdit.apiId);  // Store real database ID
       setItemId(itemToEdit.id || '');
       setItemName(itemToEdit.name || '');
-      setCategory(itemToEdit.category_name || '');
+      setCategory(itemToEdit.category_id?.toString() || '');
       setShelfLife(itemToEdit.shelf_life || '');
       setShelfLifeUnit(itemToEdit.shelf_unit || 'Days');
       setCostPrice(itemToEdit.cost_price?.toString() || '');
       setSellingPrice(itemToEdit.selling_price?.toString() || '');
-      setRecipe(
-        itemToEdit.recipe && itemToEdit.recipe.length > 0
-          ? itemToEdit.recipe.map(row => ({
-              id: row.id,
-              ingredientId: row.ingredientId,
-              qty: row.qty,
-              unit: row.unit,
-            }))
-          : [{ ...initialRecipeRow }]
-      );
+      const sourceRecipe =
+        (Array.isArray(itemToEdit.recipe) && itemToEdit.recipe.length > 0
+          ? itemToEdit.recipe
+          : Array.isArray(itemToEdit.recipe_items)
+          ? itemToEdit.recipe_items
+          : []) || [];
+
+      const mappedRecipe = sourceRecipe
+        .map((row: any) => ({
+          id: row.id,
+          ingredientId: String(row.ingredientId ?? row.ingredient_id ?? ''),
+          qty: row.qty ?? row.quantity_required ?? '',
+          unit: row.unit ?? row.ingredient_unit ?? '',
+        }))
+        .filter((row: RecipeRow) => row.ingredientId || row.qty);
+
+      setRecipe(mappedRecipe.length > 0 ? mappedRecipe : [{ ...initialRecipeRow }]);
     }
   }, [isOpen, itemToEdit]);
 
@@ -78,7 +143,7 @@ export const EditProductItemModal: React.FC<EditProductItemModalProps> = ({ isOp
     setRecipe(prev => prev.map((row, i) => {
       if (i !== idx) return row;
       if (field === 'ingredientId') {
-        const found = INGREDIENTS.find(ing => ing.id === value);
+        const found = ingredients.find(ing => ing.id === String(value));
         return { ...row, ingredientId: value as string, unit: found ? found.unit : '', qty: '' };
       }
       return { ...row, [field]: value };
@@ -93,9 +158,84 @@ export const EditProductItemModal: React.FC<EditProductItemModalProps> = ({ isOp
     setRecipe(prev => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
   };
 
-  const handleUpdate = () => {
-    // TODO: Add API logic here
-    onClose();
+  const showToast = (message: string, type: 'success' | 'error') => {
+    console.log('[Toast]', { message, type });
+    setToast({ message, type, visible: true });
+    setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
+  };
+
+  const handleUpdate = async () => {
+    try {
+      // Validation
+      if (!itemId) {
+        showToast('Item ID is missing', 'error');
+        return;
+      }
+
+      if (!itemName.trim()) {
+        showToast('Item Name is required', 'error');
+        return;
+      }
+
+      if (!category) {
+        showToast('Category is required', 'error');
+        return;
+      }
+
+      if (!costPrice || parseFloat(costPrice as string) <= 0) {
+        showToast('Cost Price must be greater than 0', 'error');
+        return;
+      }
+
+      if (!sellingPrice || parseFloat(sellingPrice as string) <= 0) {
+        showToast('Selling Price must be greater than 0', 'error');
+        return;
+      }
+
+      setIsUpdating(true);
+
+      // Prepare payload
+      const recipeItemsPayload = recipe
+        .map((row) => ({
+          ingredient_id: Number(row.ingredientId),
+          quantity_required: Number(row.qty),
+        }))
+        .filter((row) => Number.isFinite(row.ingredient_id) && row.ingredient_id > 0 && Number.isFinite(row.quantity_required) && row.quantity_required > 0);
+
+      const payload = {
+        name: itemName.trim(),
+        category_id: parseInt(category, 10),
+        shelf_life: shelfLife ? parseInt(shelfLife, 10) : undefined,
+        shelf_unit: shelfLifeUnit,
+        cost_price: parseFloat(costPrice as string),
+        selling_price: parseFloat(sellingPrice as string),
+        recipe_items: recipeItemsPayload,
+      };
+
+      console.log('[Update Product]', { apiId, itemId, payload });
+
+      // Call API using real database primary key (apiId)
+      await productApi.update(apiId, payload);
+
+      showToast('✅ Product updated successfully!', 'success');
+
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess();
+      }
+
+      // Close modal after a short delay
+      setTimeout(() => {
+        onClose();
+      }, 500);
+    } catch (error) {
+      console.error('[Update Product Error]', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to update product';
+      showToast(`❌ ${errorMessage}`, 'error');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -135,11 +275,11 @@ export const EditProductItemModal: React.FC<EditProductItemModalProps> = ({ isOp
               <label className="block text-xs font-semibold mb-1 text-orange-700">Category</label>
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger className="w-full bg-white border border-orange-200 rounded-md shadow-sm focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-orange-900 text-sm py-2 px-3 min-h-[36px]">
-                  <SelectValue placeholder="Select Category" />
+                  <SelectValue placeholder={isCategoriesLoading ? "Loading..." : "Select Category"} />
                 </SelectTrigger>
                 <SelectContent className="bg-white border border-orange-200 rounded-md shadow-lg mt-1 py-1 min-w-[120px]">
-                  {CATEGORIES.map(cat => (
-                    <SelectItem key={cat} value={cat} className="px-3 py-1.5 hover:bg-orange-100 focus:bg-orange-200 text-orange-900 cursor-pointer rounded-md transition-all text-sm">{cat}</SelectItem>
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id.toString()} className="px-3 py-1.5 hover:bg-orange-100 focus:bg-orange-200 text-orange-900 cursor-pointer rounded-md transition-all text-sm">{cat.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -208,7 +348,7 @@ export const EditProductItemModal: React.FC<EditProductItemModalProps> = ({ isOp
                           <SelectValue placeholder="Select Ingredient" />
                         </SelectTrigger>
                         <SelectContent className="bg-white border border-orange-200 rounded-md shadow-lg mt-1 py-1 min-w-[120px]">
-                          {INGREDIENTS.map(ing => (
+                          {ingredients.map(ing => (
                             <SelectItem key={ing.id} value={ing.id} className="px-3 py-1.5 hover:bg-orange-100 focus:bg-orange-200 text-orange-900 cursor-pointer rounded-md transition-all text-sm">{ing.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -233,9 +373,45 @@ export const EditProductItemModal: React.FC<EditProductItemModalProps> = ({ isOp
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={onClose} className="border-orange-300 text-orange-600 px-6 py-2 rounded-lg hover:bg-orange-100 transition-colors">Cancel</Button>
-            <Button onClick={handleUpdate} className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg shadow transition-colors">Update Product</Button>
+            <Button 
+              variant="outline" 
+              onClick={onClose} 
+              disabled={isUpdating}
+              className="border-orange-300 text-orange-600 px-6 py-2 rounded-lg hover:bg-orange-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdate} 
+              disabled={isUpdating}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg shadow transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isUpdating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Updating...
+                </>
+              ) : (
+                'Update Product'
+              )}
+            </Button>
           </div>
+
+          {/* Toast Notification */}
+          {toast.visible && (
+            <div
+              className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 text-white z-[999] transition-all duration-300 ${
+                toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+              }`}
+            >
+              {toast.type === 'success' ? (
+                <CheckCircle size={20} />
+              ) : (
+                <AlertCircle size={20} />
+              )}
+              <span>{toast.message}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
