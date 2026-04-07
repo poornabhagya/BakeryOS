@@ -17,6 +17,7 @@ interface StaffMember {
   id: number;
   employeeId: string;
   name: string;
+  username: string;
   nic: string;
   role: string;
   roleColor: string;
@@ -32,6 +33,7 @@ const initialStaffMembers: StaffMember[] = [
     id: 1,
     employeeId: '#EMP001',
     name: 'Kamal Perera',
+    username: 'kamal.perera',
     nic: '901234567V',
     role: 'Baker',
     roleColor: 'blue',
@@ -45,6 +47,7 @@ const initialStaffMembers: StaffMember[] = [
     id: 2,
     employeeId: '#EMP002',
     name: 'Nimali Silva',
+    username: 'nimali.silva',
     nic: '921234568V',
     role: 'Cashier',
     roleColor: 'green',
@@ -58,6 +61,7 @@ const initialStaffMembers: StaffMember[] = [
     id: 3,
     employeeId: '#EMP003',
     name: 'Saman Kumara',
+    username: 'saman.kumara',
     nic: '881234569V',
     role: 'Storekeeper',
     roleColor: 'orange',
@@ -71,6 +75,7 @@ const initialStaffMembers: StaffMember[] = [
     id: 4,
     employeeId: '#EMP004',
     name: 'Anura Fernando',
+    username: 'anura.fernando',
     nic: '851234570V',
     role: 'Manager',
     roleColor: 'purple',
@@ -122,6 +127,7 @@ export function UserManagement() {
           id: uiUser.id,
           employeeId: uiUser.employee_id,
           name: uiUser.name,
+          username: uiUser.username || '',
           nic: uiUser.nic,
           role: uiUser.role,
           roleColor: getRoleColor(uiUser.role),
@@ -165,6 +171,7 @@ export function UserManagement() {
       .filter(member => {
         const matchesSearch = searchTerm === '' || 
           member.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          member.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
           member.nic.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesRole = roleFilter === 'all' || member.role.toLowerCase() === roleFilter.toLowerCase();
         const matchesStatus = statusFilter === 'all' || member.status.toLowerCase() === statusFilter.toLowerCase();
@@ -190,6 +197,7 @@ export function UserManagement() {
         id: uiUser.id,
         employeeId: uiUser.employee_id,
         name: uiUser.name,
+        username: uiUser.username || '',
         nic: uiUser.nic,
         role: uiUser.role,
         roleColor: getRoleColor(uiUser.role),
@@ -332,7 +340,7 @@ export function UserManagement() {
           fullName: selectedUser.name,
           nic: selectedUser.nic,
           contact: selectedUser.contact,
-          username: selectedUser.nic,
+          username: selectedUser.username,
           role: selectedUser.role as any,
           status: selectedUser.status,
         } : null}
@@ -343,6 +351,7 @@ export function UserManagement() {
               ? {
                   ...u,
                   name: updatedUser.fullName,
+                  username: updatedUser.username,
                   nic: updatedUser.nic,
                   contact: updatedUser.contact,
                   role: updatedUser.role,
