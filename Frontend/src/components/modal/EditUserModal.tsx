@@ -79,13 +79,14 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ open, onClose, user, onUp
         full_name: fullName.trim(),
         nic: nic.trim() || '',
         contact: contact.trim() || '',
+        username: username.trim(),
         role: role,
         status: status === 'Active' ? 'active' : 'inactive',  // Convert frontend status to backend format
       };
 
-      // Only include password if user provided a new one
+      // Only include password if user provided a non-empty new one
       if (password.trim()) {
-        payload.password = password;
+        payload.password = password.trim();
       }
 
       console.log('[EditUserModal] Submitting update payload:', payload);

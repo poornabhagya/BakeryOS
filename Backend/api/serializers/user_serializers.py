@@ -247,7 +247,21 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             'avatar_color',
             'is_active'
         ]
-        read_only_fields = ['username']  # Don't allow username changes
+        read_only_fields = []
+
+    def validate_username(self, value):
+        """Allow username updates and enforce uniqueness excluding current instance."""
+        value = sanitize_string(value)
+        validate_username_format(value)
+
+        queryset = User.objects.filter(username=value)
+        if self.instance is not None:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError("Username already exists.")
+
+        return value
     
     def validate_contact(self, value):
         """Validate phone number format"""
