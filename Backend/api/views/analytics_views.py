@@ -529,8 +529,9 @@ class InventoryAnalyticsViewSet(viewsets.ViewSet):
         expired_items = []
         
         for batch in expired_batches:
-            cost_price = batch.cost_price or Decimal('0')
-            item_value = (batch.current_qty or Decimal('0')) * cost_price
+            batch_total_cost = batch.total_batch_cost or Decimal('0')
+            unit_cost = (batch_total_cost / batch.quantity) if batch.quantity else Decimal('0')
+            item_value = (batch.current_qty or Decimal('0')) * unit_cost
             total_expired_value += item_value
             
             # Convert expire_date to date if it's a datetime object
@@ -542,7 +543,7 @@ class InventoryAnalyticsViewSet(viewsets.ViewSet):
                 'ingredient_name': batch.ingredient_id.name,
                 'quantity': batch.current_qty or Decimal('0'),
                 'expire_date': expire_date,
-                'cost_price': cost_price,
+                'cost_price': unit_cost,
                 'expired_value': item_value,
                 'days_expired': (today - expire_date).days,
             })

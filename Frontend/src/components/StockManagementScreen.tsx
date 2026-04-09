@@ -55,6 +55,8 @@ type Ingredient = {
   unit: string; // e.g., 'kg', 'L'
   trackingType: string;
   lowStockValue: number;
+  lowStockValueRaw?: number;
+  thresholdUnit?: string;
   supplierContact: string;
   shelfLife: number;  // Duration number for shelf life
   shelfUnit: string;  // Unit for shelf life: days, weeks, months, years
@@ -84,6 +86,17 @@ const StockManagementScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState("Products");
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(true);
+
+  const getDefaultThresholdUnit = (trackingType?: string) => {
+    if (trackingType === 'Volume') return 'L';
+    if (trackingType === 'Count') return 'nos';
+    return 'kg';
+  };
+
+  const toNumberSafe = (value: any, fallback: number = 0) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
 
   // Handlers for refreshing data after adding items
   const handleProductAdded = async () => {
@@ -128,7 +141,12 @@ const StockManagementScreen: React.FC = () => {
         quantity: apiIngredient.total_quantity,
         unit: apiIngredient.base_unit,
         trackingType: apiIngredient.tracking_type,
-        lowStockValue: apiIngredient.low_stock_threshold,
+        lowStockValueRaw: toNumberSafe(apiIngredient.low_stock_threshold),
+        lowStockValue: toNumberSafe(
+          apiIngredient.low_stock_threshold_display,
+          toNumberSafe(apiIngredient.low_stock_threshold)
+        ),
+        thresholdUnit: apiIngredient.threshold_unit || getDefaultThresholdUnit(apiIngredient.tracking_type),
         supplierContact: apiIngredient.supplier_contact || 'N/A',
         shelfLife: apiIngredient.shelf_life || 30,
         shelfUnit: apiIngredient.shelf_unit || 'days',
@@ -202,7 +220,12 @@ const StockManagementScreen: React.FC = () => {
           quantity: apiIngredient.total_quantity,
           unit: apiIngredient.base_unit,
           trackingType: apiIngredient.tracking_type,
-          lowStockValue: apiIngredient.low_stock_threshold,
+          lowStockValueRaw: toNumberSafe(apiIngredient.low_stock_threshold),
+          lowStockValue: toNumberSafe(
+            apiIngredient.low_stock_threshold_display,
+            toNumberSafe(apiIngredient.low_stock_threshold)
+          ),
+          thresholdUnit: apiIngredient.threshold_unit || getDefaultThresholdUnit(apiIngredient.tracking_type),
           supplierContact: apiIngredient.supplier_contact || 'N/A',
           shelfLife: apiIngredient.shelf_life || 30,
           shelfUnit: apiIngredient.shelf_unit || 'days',
@@ -850,9 +873,11 @@ const StockManagementScreen: React.FC = () => {
                   <td className="py-3 px-4">
                     {p.is_active === false ? (
                       <span className="px-2 py-1 rounded bg-gray-200 text-gray-600 font-semibold text-xs">Inactive</span>
-                    ) : p.quantity === 0 || p.status === 'out_of_stock' ? (
+                    ) : (activeTab === "Ingredients" && Number(p.quantity || 0) <= 0) || (activeTab === "Products" && (p.quantity === 0 || p.status === 'out_of_stock')) ? (
                       <span className="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold text-xs">Out of Stock</span>
-                    ) : p.quantity < 10 || p.status === 'low_stock' ? (
+                    ) : (activeTab === "Ingredients"
+                        ? Number(p.quantity || 0) <= Number((p.lowStockValueRaw ?? 0))
+                        : p.quantity < 10 || p.status === 'low_stock') ? (
                       <span className="px-2 py-1 rounded bg-orange-100 text-orange-700 font-semibold text-xs">
                         {activeTab === "Ingredients"
                           ? formatQuantityForDisplay(p.quantity, p.trackingType || 'Weight')

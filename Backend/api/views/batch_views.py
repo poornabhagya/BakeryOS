@@ -391,8 +391,8 @@ class BatchViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
             ])
 
         for ingredient in ingredients:
-            latest_batch = ingredient.batches.filter(cost_price__isnull=False).order_by('-created_at').first()
-            ingredient_cost = float(latest_batch.cost_price) if latest_batch and latest_batch.cost_price is not None else 0.0
+            latest_batch = ingredient.batches.filter(total_batch_cost__isnull=False).order_by('-created_at').first()
+            ingredient_cost = float(latest_batch.total_batch_cost) if latest_batch and latest_batch.total_batch_cost is not None else 0.0
             total_cost += ingredient_cost
             sheet.append([
                 ingredient.ingredient_id,

@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from .category import Category
+from decimal import Decimal
 
 
 class Ingredient(models.Model):
@@ -26,6 +27,14 @@ class Ingredient(models.Model):
         ('Weight', 'Weight (kg, g)'),
         ('Volume', 'Volume (liters, ml)'),
         ('Count', 'Count (pieces, units)'),
+    ]
+
+    THRESHOLD_UNIT_CHOICES = [
+        ('g', 'Grams (g)'),
+        ('kg', 'Kilograms (kg)'),
+        ('ml', 'Milliliters (ml)'),
+        ('L', 'Liters (L)'),
+        ('nos', 'Numbers (nos)'),
     ]
     
     SHELF_UNIT_CHOICES = [
@@ -97,6 +106,14 @@ class Ingredient(models.Model):
         default=10,
         help_text="Alert threshold for low stock"
     )
+
+    threshold_unit = models.CharField(
+        max_length=10,
+        choices=THRESHOLD_UNIT_CHOICES,
+        blank=True,
+        default='',
+        help_text="User-preferred unit for low stock threshold display/input"
+    )
     
     # Shelf life
     shelf_life = models.IntegerField(
@@ -147,7 +164,7 @@ class Ingredient(models.Model):
     
     def is_low_stock(self):
         """Check if ingredient is below threshold"""
-        return self.total_quantity < self.low_stock_threshold
+        return self.total_quantity <= self.low_stock_threshold
     
     def is_out_of_stock(self):
         """Check if ingredient is out of stock"""
@@ -162,6 +179,36 @@ class Ingredient(models.Model):
             return 'LOW_STOCK'
         else:
             return 'IN_STOCK'
+
+    def get_default_threshold_unit(self):
+        """Get fallback threshold unit for old records."""
+        mapping = {
+            'Weight': 'g',
+            'Volume': 'ml',
+            'Count': 'nos',
+        }
+        return mapping.get(self.tracking_type, self.base_unit or 'g')
+
+    @property
+    def effective_threshold_unit(self):
+        """Return preferred threshold unit with safe fallback."""
+        return self.threshold_unit or self.get_default_threshold_unit()
+
+    @property
+    def threshold_display_value(self):
+        """Return threshold converted from base unit to preferred display unit."""
+        unit = self.effective_threshold_unit
+        factor_map = {
+            'g': Decimal('1'),
+            'kg': Decimal('1000'),
+            'ml': Decimal('1'),
+            'L': Decimal('1000'),
+            'nos': Decimal('1'),
+        }
+        factor = factor_map.get(unit, Decimal('1'))
+        if factor == 0:
+            return self.low_stock_threshold
+        return self.low_stock_threshold / factor
 
 
 # Signal handler for auto-ID generation

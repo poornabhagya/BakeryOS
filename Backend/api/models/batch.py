@@ -13,7 +13,7 @@ class IngredientBatch(models.Model):
     - Auto-generated batch_id (BATCH-1001, BATCH-1002, etc.)
     - Linked to Ingredient
     - Tracks received quantity and current remaining quantity
-    - Cost per unit for financial tracking
+    - Total batch cost for financial tracking
     - Expiry date management with auto-expiry calculation
     - Status tracking: Active, Expired, Used
     - FIFO ordering for consumption
@@ -64,12 +64,12 @@ class IngredientBatch(models.Model):
     )
     
     # Cost tracking
-    cost_price = models.DecimalField(
+    total_batch_cost = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         blank=True,
         null=True,
-        help_text="Cost per unit (optional for financial tracking)"
+        help_text="Total cost for this batch (optional for financial tracking)"
     )
     
     # Date fields
@@ -130,9 +130,9 @@ class IngredientBatch(models.Model):
     @property
     def total_cost(self):
         """Calculate total cost for this batch"""
-        if self.cost_price is None:
+        if self.total_batch_cost is None:
             return None
-        return self.quantity * self.cost_price
+        return self.total_batch_cost
     
     @property
     def expiry_progress(self):
@@ -220,7 +220,8 @@ class IngredientBatch(models.Model):
                 )
 
                 expired_qty = self.current_qty
-                unit_cost = self.cost_price if self.cost_price is not None else Decimal('0')
+                batch_total_cost = self.total_batch_cost if self.total_batch_cost is not None else Decimal('0')
+                unit_cost = (batch_total_cost / self.quantity) if self.quantity else Decimal('0')
 
                 IngredientWastage.objects.create(
                     ingredient_id=self.ingredient_id,

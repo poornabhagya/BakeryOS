@@ -5,6 +5,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { CheckCircle, AlertCircle } from 'lucide-react';
 import apiClient, { ingredientApi } from '../../../services/api';
 
+const THRESHOLD_UNITS: Record<string, string[]> = {
+  Weight: ['kg', 'g'],
+  Volume: ['L', 'ml'],
+  Count: ['nos'],
+};
+
 type EditIngredientItemModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -20,6 +26,7 @@ type EditIngredientItemModalProps = {
     unit: string;
     trackingType: string;
     lowStockValue: number;
+    thresholdUnit?: string;
     supplierContact: string;
     shelfLife?: number;  // Duration number for shelf life
     shelfUnit?: string;  // Unit for shelf life: days, weeks, months, years
@@ -55,6 +62,7 @@ export const EditIngredientItemModal: React.FC<EditIngredientItemModalProps> = (
   const [supplierContact, setSupplierContact] = useState('');
   const [shelfLife, setShelfLife] = useState('30');
   const [shelfUnit, setShelfUnit] = useState('days');
+  const [thresholdUnit, setThresholdUnit] = useState('kg');
 
   // Categories state
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -85,8 +93,16 @@ export const EditIngredientItemModal: React.FC<EditIngredientItemModalProps> = (
       // Use defaults for shelf_life and shelf_unit if not available
       setShelfLife(ingredient.shelfLife?.toString() || '30');
       setShelfUnit(ingredient.shelfUnit || 'days');
+      setThresholdUnit(ingredient.thresholdUnit || 'kg');
     }
   }, [isOpen, ingredient]);
+
+  useEffect(() => {
+    const allowedUnits = THRESHOLD_UNITS[trackingType] || ['g'];
+    if (!allowedUnits.includes(thresholdUnit)) {
+      setThresholdUnit(allowedUnits[0]);
+    }
+  }, [trackingType, thresholdUnit]);
 
   // Fetch ingredient categories from API
   useEffect(() => {
@@ -180,6 +196,7 @@ export const EditIngredientItemModal: React.FC<EditIngredientItemModalProps> = (
         supplier_contact: supplierContact.trim(),  // Supplier contact info
         base_unit: unit,  // Unit: kg, g, L, ml, etc.
         low_stock_threshold: parseFloat(lowStockValue as string),  // Low stock alert threshold
+        threshold_unit: thresholdUnit,
         shelf_life: parseInt(shelfLife, 10),  // Strict parsing with radix 10
         shelf_unit: shelfUnit,  // Shelf life unit: days, weeks, months, years
       };
@@ -290,7 +307,7 @@ export const EditIngredientItemModal: React.FC<EditIngredientItemModalProps> = (
           <hr className="my-6 border-orange-200" />
 
           {/* Stock Details */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div>
               <label className="block text-xs font-semibold mb-1 text-orange-700">Quantity *</label>
               <Input
@@ -329,6 +346,25 @@ export const EditIngredientItemModal: React.FC<EditIngredientItemModalProps> = (
                 placeholder="e.g. 10"
                 className="border border-orange-100"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1 text-orange-700">Threshold Unit *</label>
+              <Select value={thresholdUnit} onValueChange={setThresholdUnit}>
+                <SelectTrigger className="w-full bg-white border border-orange-200 rounded-md shadow-sm focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-orange-900 text-sm py-2 px-3 min-h-[36px]">
+                  <SelectValue placeholder="Select Unit" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border border-orange-200 rounded-md shadow-lg mt-1 py-1">
+                  {(THRESHOLD_UNITS[trackingType] || ['g']).map(u => (
+                    <SelectItem
+                      key={u}
+                      value={u}
+                      className="px-3 py-1.5 hover:bg-orange-100 focus:bg-orange-200 text-orange-900 cursor-pointer rounded-md transition-all text-sm"
+                    >
+                      {u}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </section>
 

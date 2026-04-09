@@ -132,7 +132,7 @@ class IngredientViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         is_low_stock = request.query_params.get('is_low_stock')
         if is_low_stock and is_low_stock.lower() == 'true':
             self.queryset = self.queryset.filter(
-                total_quantity__lt=F('low_stock_threshold')
+                total_quantity__lte=F('low_stock_threshold')
             )
         
         return super().list(request, *args, **kwargs)

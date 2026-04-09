@@ -13,11 +13,13 @@ class BatchListSerializer(serializers.ModelSerializer):
     is_expired = serializers.SerializerMethodField()
     days_until_expiry = serializers.SerializerMethodField()
     
+    cost_price = serializers.DecimalField(source='total_batch_cost', max_digits=10, decimal_places=2, read_only=True)
+
     class Meta:
         model = IngredientBatch
         fields = [
             'id', 'batch_id', 'ingredient_id', 'ingredient_name', 'ingredient_unit',
-            'quantity', 'current_qty', 'cost_price', 'made_date', 'expire_date', 'status',
+            'quantity', 'current_qty', 'total_batch_cost', 'cost_price', 'made_date', 'expire_date', 'status',
             'is_expired', 'days_until_expiry', 'created_at'
         ]
         read_only_fields = ['batch_id', 'created_at']
@@ -48,12 +50,14 @@ class BatchDetailSerializer(serializers.ModelSerializer):
     total_cost = serializers.SerializerMethodField()
     expiry_progress = serializers.SerializerMethodField()
     
+    cost_price = serializers.DecimalField(source='total_batch_cost', max_digits=10, decimal_places=2, read_only=True)
+
     class Meta:
         model = IngredientBatch
         fields = [
             'id', 'batch_id', 'ingredient_id', 'ingredient_name', 'ingredient_unit',
             'ingredient_tracking', 'quantity', 'current_qty', 'remaining_qty',
-            'cost_price', 'total_cost', 'made_date', 'expire_date', 'status',
+            'total_batch_cost', 'cost_price', 'total_cost', 'made_date', 'expire_date', 'status',
             'is_expired', 'days_until_expiry', 'expiry_progress', 'created_at', 'updated_at'
         ]
         read_only_fields = ['batch_id', 'created_at', 'updated_at']
@@ -84,10 +88,12 @@ class BatchCreateSerializer(serializers.ModelSerializer):
     Serializer for creating/updating batches.
     Includes custom validation rules.
     """
+    cost_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = IngredientBatch
         fields = [
-            'ingredient_id', 'quantity', 'current_qty', 'cost_price',
+            'ingredient_id', 'quantity', 'current_qty', 'total_batch_cost', 'cost_price',
             'made_date', 'expire_date'
         ]
     
@@ -103,10 +109,10 @@ class BatchCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Current quantity cannot be negative.")
         return value
     
-    def validate_cost_price(self, value):
-        """Validate cost_price if provided"""
+    def validate_total_batch_cost(self, value):
+        """Validate total batch cost if provided"""
         if value is not None and value <= 0:
-            raise serializers.ValidationError("Cost price must be greater than 0 or null.")
+            raise serializers.ValidationError("Total batch cost must be greater than 0 or null.")
         return value
     
     def validate(self, attrs):
@@ -135,6 +141,12 @@ class BatchCreateSerializer(serializers.ModelSerializer):
         # Set current_qty to quantity if not provided
         if current_qty is None:
             attrs['current_qty'] = quantity
+
+        # Backward compatibility: accept legacy cost_price payload key.
+        if attrs.get('total_batch_cost') is None and attrs.get('cost_price') is not None:
+            attrs['total_batch_cost'] = attrs.pop('cost_price')
+        else:
+            attrs.pop('cost_price', None)
         
         return attrs
 

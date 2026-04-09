@@ -7,7 +7,9 @@ import html2canvas from 'html2canvas';
 import { AddWastageReasonModal } from './modal/AddWastageReasonModal';
 import { ViewWastageReasonsModal, WastageReason } from './modal/ViewWastageReasonsModal';
 import { multiplyNumeric } from '../utils/numericUtils';
+import { formatQuantityForDisplay } from '../utils/conversions';
 import { wastageApi } from '../services/api';
+import apiClient from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 type WastageItem = {
@@ -15,9 +17,11 @@ type WastageItem = {
   name: string;
   category?: string;
   category_name?: string;
-  reason: 'Expired' | 'Burnt' | 'Stale' | 'Damaged' | 'Spilled' | string;
+  reason: string;
+  reasonId?: string;
   quantity: number;
   unit: string; // e.g., 'pcs', 'kg', 'L'
+  trackingType?: string;
   unitCost: number; // per unit cost
   reportedBy: string;
   time: string; // e.g., '10:30 AM'
@@ -27,12 +31,16 @@ type WastageItem = {
 export function WastageOverview() {
   const { user } = useAuth();
   const isManager = user?.role === 'Manager';
+  const isStorekeeper = String(user?.role || '').toLowerCase() === 'storekeeper';
+  const isCashier = String(user?.role || '').toLowerCase() === 'cashier';
+  const canSeeProductData = !isStorekeeper;
+  const canSeeIngredientData = !isCashier;
 
   const today = new Date().toISOString().slice(0,10);
   const [dateFrom, setDateFrom] = useState<string>('1970-01-01'); // All Time default
   const [dateTo, setDateTo] = useState<string>(today);
   const [timePeriod, setTimePeriod] = useState<string>('All Time');
-  const [reason, setReason] = useState<string>('All Reasons');
+  const [reasonId, setReasonId] = useState<string>('All Reasons');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   const [addReasonOpen, setAddReasonOpen] = useState(false);
@@ -52,7 +60,25 @@ export function WastageOverview() {
         setIsLoading(true);
         setFetchError(null);
 
-        const response = await wastageApi.getAll();
+        const [response, ingredientsResponse, reasonsResponse] = await Promise.all([
+          wastageApi.getAll(),
+          apiClient.ingredients.getAllPages(),
+          apiClient.wastageReason.getAll(),
+        ]);
+
+        // Process wastage reasons
+        const mappedReasons = (reasonsResponse || []).map((reason: any) => ({
+          id: reason.id?.toString() || '',
+          name: reason.reason || reason.name || '',
+          note: reason.description || reason.note || '',
+        }));
+        setWastageReasons(mappedReasons);
+
+        const ingredientTrackingById = new Map<number, string>();
+        (ingredientsResponse?.items || []).forEach((ing: any) => {
+          ingredientTrackingById.set(Number(ing.id), String(ing.tracking_type || ''));
+        });
+
         const wastageItems = Array.isArray(response)
           ? response
           : (Array.isArray((response as any)?.items)
@@ -79,8 +105,10 @@ export function WastageOverview() {
             category: item.category_name,
             category_name: item.category_name,
             reason: item.reason_text || 'Unknown',
+            reasonId: item.reason_id?.toString(),
             quantity: item.quantity || 0,
             unit: 'Unit', // Default unit, adjust if API provides units
+            trackingType: ingredientTrackingById.get(Number(item.ingredient_id)) || undefined,
             unitCost: item.unit_cost || 0,
             reportedBy: item.reported_by_name || 'System',
             time: new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -120,26 +148,26 @@ export function WastageOverview() {
   const filteredProduct = useMemo(() => {
     return productWastage.filter((i) => {
       if (i.date < dateFrom || i.date > dateTo) return false;
-      if (reason !== 'All Reasons' && i.reason !== reason) return false;
+      if (reasonId !== 'All Reasons' && i.reasonId !== reasonId) return false;
       if (searchTerm.trim()) {
         const q = searchTerm.trim().toLowerCase();
         if (!i.name.toLowerCase().includes(q)) return false;
       }
       return true;
     });
-  }, [productWastage, dateFrom, dateTo, reason, searchTerm]);
+  }, [productWastage, dateFrom, dateTo, reasonId, searchTerm]);
 
   const filteredIngredient = useMemo(() => {
     return ingredientWastage.filter((i) => {
       if (i.date < dateFrom || i.date > dateTo) return false;
-      if (reason !== 'All Reasons' && i.reason !== reason) return false;
+      if (reasonId !== 'All Reasons' && i.reasonId !== reasonId) return false;
       if (searchTerm.trim()) {
         const q = searchTerm.trim().toLowerCase();
         if (!i.name.toLowerCase().includes(q)) return false;
       }
       return true;
     });
-  }, [ingredientWastage, dateFrom, dateTo, reason, searchTerm]);
+  }, [ingredientWastage, dateFrom, dateTo, reasonId, searchTerm]);
 
   // When timePeriod changes, update dateFrom/dateTo accordingly
   const applyTimePeriod = (period: string) => {
@@ -177,7 +205,7 @@ export function WastageOverview() {
     setDateFrom('1970-01-01'); // Reset to All Time
     setDateTo(todayIso);
     setTimePeriod('All Time');
-    setReason('All Reasons');
+    setReasonId('All Reasons');
     setSearchTerm('');
   };
 
@@ -222,6 +250,13 @@ export function WastageOverview() {
     const d = new Date(dateStr);
     const datePart = d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     return `${datePart} • ${timeStr}`;
+  };
+
+  const formatWholeItemQuantity = (value: number) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '0';
+    if (Number.isInteger(num)) return String(num);
+    return num.toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
   };
 
   const exportToPDF = () => {
@@ -446,12 +481,13 @@ export function WastageOverview() {
       }
 
       setIsExportingExcel(true);
+      const selectedReasonText = reasonId === 'All Reasons' ? 'All Reasons' : wastageReasons.find(r => r.id === reasonId)?.name || 'All Reasons';
       const { blob, fileName } = await wastageApi.exportExcel({
         search: searchTerm.trim() || undefined,
         date_from: dateFrom,
         date_to: dateTo,
         time_period: timePeriod,
-        reason,
+        reason: selectedReasonText,
       });
 
       const url = window.URL.createObjectURL(blob);
@@ -527,12 +563,16 @@ export function WastageOverview() {
               </div>
               <div>
                 <div className="text-sm text-red-800 font-semibold">Total Loss Today</div>
-                <div className="text-lg font-bold text-red-600">
-                  Rs. {kpiStats.productLoss.toLocaleString()} (Products)
-                </div>
-                <div className="text-lg font-bold text-red-600">
-                  Rs. {kpiStats.ingredientLoss.toLocaleString()} (Ingredients)
-                </div>
+                {canSeeProductData && (
+                  <div className="text-lg font-bold text-red-600">
+                    Rs. {kpiStats.productLoss.toLocaleString()} (Products)
+                  </div>
+                )}
+                {canSeeIngredientData && (
+                  <div className="text-lg font-bold text-red-600">
+                    Rs. {kpiStats.ingredientLoss.toLocaleString()} (Ingredients)
+                  </div>
+                )}
               </div>
             </div>
 
@@ -543,12 +583,16 @@ export function WastageOverview() {
               </div>
               <div>
                 <div className="text-sm text-orange-800 font-semibold">Total Wasted Qty</div>
-                <div className="text-lg font-bold text-orange-700">
-                  {kpiStats.productQty} (Products)
-                </div>
-                <div className="text-lg font-bold text-orange-700">
-                  {kpiStats.ingredientQty} (Ingredients)
-                </div>
+                {canSeeProductData && (
+                  <div className="text-lg font-bold text-orange-700">
+                    {kpiStats.productQty} (Products)
+                  </div>
+                )}
+                {canSeeIngredientData && (
+                  <div className="text-lg font-bold text-orange-700">
+                    {kpiStats.ingredientQty} (Ingredients)
+                  </div>
+                )}
               </div>
             </div>
 
@@ -559,17 +603,23 @@ export function WastageOverview() {
               </div>
               <div>
                 <div className="text-sm text-blue-800 font-semibold">Most Wasted Item</div>
-                {kpiStats.mostWastedProduct && (
+                {canSeeProductData && kpiStats.mostWastedProduct && (
                   <div className="text-sm font-semibold text-blue-700">
                     {kpiStats.mostWastedProduct.name} ({Number(kpiStats.mostWastedProduct.quantity).toLocaleString()} {kpiStats.mostWastedProduct.unit}) - Product
                   </div>
                 )}
-                {kpiStats.mostWastedIngredient && (
+                {canSeeIngredientData && kpiStats.mostWastedIngredient && (
                   <div className="text-sm font-semibold text-blue-700">
                     {kpiStats.mostWastedIngredient.name} ({Number(kpiStats.mostWastedIngredient.quantity).toLocaleString()} {kpiStats.mostWastedIngredient.unit}) - Ingredient
                   </div>
                 )}
-                {!kpiStats.mostWastedProduct && !kpiStats.mostWastedIngredient && (
+                {((canSeeProductData && !kpiStats.mostWastedProduct) && (canSeeIngredientData && !kpiStats.mostWastedIngredient)) && (
+                  <div className="text-lg font-bold text-blue-700">—</div>
+                )}
+                {(!canSeeProductData && canSeeIngredientData && !kpiStats.mostWastedIngredient) && (
+                  <div className="text-lg font-bold text-blue-700">—</div>
+                )}
+                {(canSeeProductData && !canSeeIngredientData && !kpiStats.mostWastedProduct) && (
                   <div className="text-lg font-bold text-blue-700">—</div>
                 )}
               </div>
@@ -600,13 +650,13 @@ export function WastageOverview() {
                 <option>This Year</option>
               </select>
 
-              <select value={reason} onChange={(e) => setReason(e.target.value)} className="px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-900">
-                <option>All Reasons</option>
-                <option>Expired</option>
-                <option>Burnt</option>
-                <option>Stale</option>
-                <option>Damaged</option>
-                <option>Spilled</option>
+              <select value={reasonId} onChange={(e) => setReasonId(e.target.value)} className="px-4 py-2 rounded-lg border border-orange-200 bg-orange-50 text-orange-900">
+                <option value="All Reasons">All Reasons</option>
+                {wastageReasons.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
               </select>
 
               <button onClick={resetFilters} className="ml-2 text-red-500 hover:text-red-700 flex items-center gap-1 font-medium text-sm">
@@ -653,9 +703,10 @@ export function WastageOverview() {
           </div>
 
           {/* Dual Tables Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className={`grid grid-cols-1 ${(canSeeProductData && canSeeIngredientData) ? 'xl:grid-cols-2' : ''} gap-6`}>
             {/* Product Wastage Table */}
-            <div className="bg-white rounded-lg border border-orange-100 overflow-hidden wastage-table">
+            {canSeeProductData && (
+              <div className="bg-white rounded-lg border border-orange-100 overflow-hidden wastage-table">
               <div className="rounded-t-lg bg-orange-100 p-4 flex items-center justify-between">
                   <h4 className="font-semibold text-orange-700">Product Wastage</h4>
                 </div>
@@ -697,7 +748,7 @@ export function WastageOverview() {
                           <td className="py-3 px-4 font-medium text-gray-800">{r.name}</td>
                           <td className="py-3 px-4 text-gray-600">{r.category || r.category_name || 'Unknown'}</td>
                           <td className="py-3 px-4"> <span className={reasonBadge(r.reason)}>{r.reason}</span> </td>
-                          <td className="py-3 px-4 text-gray-800">{r.quantity} {r.unit}</td>
+                          <td className="py-3 px-4 text-gray-800">{formatWholeItemQuantity(r.quantity)} {r.unit}</td>
                           <td className="py-3 px-4 text-red-700">Rs. {multiplyNumeric(r.unitCost, r.quantity).toLocaleString()}</td>
                           <td className="py-3 px-4 text-gray-600">{r.reportedBy}</td>
                           <td className="py-3 px-4 text-gray-600">{formatDateDisplay(r.date, r.time)}</td>
@@ -707,10 +758,12 @@ export function WastageOverview() {
                   </table>
                 )}
               </div>
-            </div>
+              </div>
+            )}
 
             {/* Ingredient Wastage Table */}
-            <div className="bg-white rounded-lg border border-orange-100 overflow-hidden wastage-table">
+            {canSeeIngredientData && (
+              <div className="bg-white rounded-lg border border-orange-100 overflow-hidden wastage-table">
               <div className="rounded-t-lg bg-orange-100 p-4 flex items-center justify-between">
                   <h4 className="font-semibold text-orange-700">Ingredient Wastage</h4>
                 </div>
@@ -752,7 +805,7 @@ export function WastageOverview() {
                           <td className="py-3 px-4 font-medium text-gray-800">{r.name}</td>
                           <td className="py-3 px-4 text-gray-600">{r.category || r.category_name || 'Unknown'}</td>
                           <td className="py-3 px-4"> <span className={reasonBadge(r.reason)}>{r.reason}</span> </td>
-                          <td className="py-3 px-4 text-gray-800">{r.quantity} {r.unit}</td>
+                          <td className="py-3 px-4 text-gray-800">{formatQuantityForDisplay(r.quantity, r.trackingType || 'Count')}</td>
                           <td className="py-3 px-4 text-red-700">Rs. {multiplyNumeric(r.unitCost, r.quantity).toLocaleString()}</td>
                           <td className="py-3 px-4 text-gray-600">{r.reportedBy}</td>
                           <td className="py-3 px-4 text-gray-600">{formatDateDisplay(r.date, r.time)}</td>
@@ -762,7 +815,8 @@ export function WastageOverview() {
                   </table>
                 )}
               </div>
-            </div>
+              </div>
+            )}
           </div>
         </>
       )}

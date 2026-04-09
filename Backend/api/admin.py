@@ -210,6 +210,7 @@ class IngredientAdmin(admin.ModelAdmin):
         'base_unit',
         'total_quantity',
         'low_stock_threshold',
+        'threshold_unit',
         'is_active',
     )
     
@@ -239,6 +240,7 @@ class IngredientAdmin(admin.ModelAdmin):
             'fields': (
                 'total_quantity',
                 'low_stock_threshold',
+                'threshold_unit',
                 'shelf_life',
                 'shelf_unit',
             ),
@@ -368,7 +370,7 @@ class IngredientBatchAdmin(admin.ModelAdmin):
         }),
         ('Cost Tracking', {
             'fields': (
-                'cost_price',
+                'total_batch_cost',
             ),
         }),
         ('Metadata', {

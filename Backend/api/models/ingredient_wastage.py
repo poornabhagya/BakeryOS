@@ -42,14 +42,14 @@ class IngredientWastage(models.Model):
     )
     
     unit_cost = models.DecimalField(
-        max_digits=10,
+        max_digits=15,
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0'))],
         help_text="Cost per unit at time of wastage"
     )
     
     total_loss = models.DecimalField(
-        max_digits=10,
+        max_digits=15,
         decimal_places=2,
         editable=False,
         help_text="Calculated as quantity * unit_cost"

@@ -91,7 +91,7 @@ class RecipeDetailSerializer(serializers.ModelSerializer):
         if batches.exists():
             batch = batches.first()
             if batch.quantity > 0:
-                return float(batch.cost_price) / float(batch.quantity)
+                return float(batch.total_batch_cost) / float(batch.quantity)
         return 0
     
     def get_total_cost_for_recipe(self, obj):
