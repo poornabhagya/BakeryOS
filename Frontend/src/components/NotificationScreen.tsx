@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
@@ -29,6 +29,10 @@ export function NotificationScreen() {
     type: 'success',
     message: '',
   });
+
+  const notifyHeaderUnreadChanged = () => {
+    window.dispatchEvent(new CustomEvent('notifications-updated'));
+  };
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -106,7 +110,36 @@ export function NotificationScreen() {
     }
   };
 
-  const filteredNotifications = notifications
+  const isStorekeeper = String(user?.role || '').toLowerCase() === 'storekeeper';
+  const isCashier = String(user?.role || '').toLowerCase() === 'cashier';
+
+  const visibleNotifications = useMemo(() => {
+    if (!isStorekeeper && !isCashier) return notifications;
+
+    return notifications.filter((notification) => {
+      const title = String(notification.title || '');
+      const message = String(notification.message || '');
+      const combinedText = `${title} ${message}`.toLowerCase();
+      const entityType = String((notification as any).entity_type || (notification as any).item_type || '').toLowerCase();
+
+      const containsProductWord = /\bproduct\b/i.test(combinedText);
+      const isProductEntity = ['product', 'products'].includes(entityType);
+      const containsIngredientWord = /\bingredient\b/i.test(combinedText);
+      const isIngredientEntity = ['ingredient', 'ingredients'].includes(entityType);
+
+      if (isStorekeeper) {
+        return !containsProductWord && !isProductEntity;
+      }
+
+      if (isCashier) {
+        return !containsIngredientWord && !isIngredientEntity;
+      }
+
+      return true;
+    });
+  }, [notifications, isStorekeeper, isCashier]);
+
+  const filteredNotifications = visibleNotifications
     .filter(notification => notification.status !== 'archived')
     .filter(notification => {
       if (activeTab === 'all') return true;
@@ -122,12 +155,13 @@ export function NotificationScreen() {
       console.log(`[NotificationScreen] Marking notification ${id} as read`);
       
       // Update local state immediately
-      setNotifications(notifications.map(n => 
+      setNotifications(prev => prev.map(n => 
         n.id === id ? { ...n, read: true, status: 'read' as const } : n
       ));
 
       // Make API PATCH request
       await apiClient.notifications.update(id, { status: 'read' });
+      notifyHeaderUnreadChanged();
       
       console.log(`[NotificationScreen] Notification ${id} marked as read successfully`);
     } catch (error) {
@@ -141,12 +175,13 @@ export function NotificationScreen() {
       console.log(`[NotificationScreen] Snoozing notification ${id}`);
       
       // Update local state immediately
-      setNotifications(notifications.map(n => 
+      setNotifications(prev => prev.map(n => 
         n.id === id ? { ...n, status: 'snoozed' as const } : n
       ));
 
       // Make API PATCH request
       await apiClient.notifications.update(String(id), { status: 'snoozed' });
+      notifyHeaderUnreadChanged();
       
       console.log(`[NotificationScreen] Notification ${id} snoozed successfully`);
     } catch (error) {
@@ -160,12 +195,13 @@ export function NotificationScreen() {
       console.log(`[NotificationScreen] Archiving notification ${id}`);
       
       // Update local state immediately
-      setNotifications(notifications.map(n => 
+      setNotifications(prev => prev.map(n => 
         n.id === id ? { ...n, status: 'archived' as const } : n
       ));
 
       // Make API PATCH request
       await apiClient.notifications.update(String(id), { status: 'archived' });
+      notifyHeaderUnreadChanged();
       
       console.log(`[NotificationScreen] Notification ${id} archived successfully`);
     } catch (error) {
@@ -197,6 +233,7 @@ export function NotificationScreen() {
 
       // Backend marks this notification as read; refresh list to reflect dimmed/read state.
       await fetchNotifications();
+      notifyHeaderUnreadChanged();
 
       showToast(
         format === 'pdf'
@@ -244,7 +281,7 @@ export function NotificationScreen() {
           >
             All
             <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-700">
-              {notifications.filter(n => n.status !== 'archived').length}
+              {visibleNotifications.filter(n => n.status !== 'archived').length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger 
@@ -253,7 +290,7 @@ export function NotificationScreen() {
           >
             Unread
             <Badge variant="secondary" className="ml-2 bg-yellow-100 text-yellow-700">
-              {notifications.filter(n => n.status === 'unread' && n.status !== 'archived').length}
+              {visibleNotifications.filter(n => n.status === 'unread' && n.status !== 'archived').length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger 
@@ -262,7 +299,7 @@ export function NotificationScreen() {
           >
             Read
             <Badge variant="secondary" className="ml-2 bg-green-100 text-green-700">
-              {notifications.filter(n => n.status === 'read' && n.status !== 'archived').length}
+              {visibleNotifications.filter(n => n.status === 'read' && n.status !== 'archived').length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger 
@@ -271,7 +308,7 @@ export function NotificationScreen() {
           >
             Alert
             <Badge variant="secondary" className="ml-2 bg-red-100 text-red-700">
-              {notifications.filter(n => categorizeNotification(n.type) === 'Alert' && n.status !== 'archived').length}
+              {visibleNotifications.filter(n => categorizeNotification(n.type) === 'Alert' && n.status !== 'archived').length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger 
@@ -280,7 +317,7 @@ export function NotificationScreen() {
           >
             System
             <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700">
-              {notifications.filter(n => categorizeNotification(n.type) === 'System' && n.status !== 'archived').length}
+              {visibleNotifications.filter(n => categorizeNotification(n.type) === 'System' && n.status !== 'archived').length}
             </Badge>
           </TabsTrigger>
         </TabsList>

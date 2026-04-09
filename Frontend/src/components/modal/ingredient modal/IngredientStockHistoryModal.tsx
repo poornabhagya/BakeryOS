@@ -299,12 +299,14 @@ export const IngredientStockHistoryModal: React.FC<IngredientStockHistoryModalPr
             ingredientName: ingredient.name,
             currentQty: selectedBatch.currentQty,
             unit: selectedBatch.unit,
+            trackingType: ingredient.trackingType,
             expiryDate: selectedBatch.expireDate,
           } : {
             batchID: '',
             ingredientName: '',
             currentQty: 0,
             unit: '',
+            trackingType: ingredient.trackingType,
             expiryDate: '',
           }}
           onConfirm={async ({ quantity, reason, note }) => {

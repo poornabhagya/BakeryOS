@@ -308,7 +308,7 @@ class RecipeViewSet(viewsets.ViewSet):
             if batches.exists():
                 batch = batches.first()
                 if batch.quantity > 0:
-                    cost_per_unit = float(batch.cost_price) / float(batch.quantity)
+                    cost_per_unit = float(batch.total_batch_cost) / float(batch.quantity)
             
             item_cost = float(total_required) * cost_per_unit
             total_batch_cost += item_cost

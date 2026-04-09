@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, ChevronRight, User } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useAuth } from '../context/AuthContext'; // 1. Imported the context
@@ -14,7 +14,7 @@ export function Header({ breadcrumbPath = ['Dashboard', 'Overview'], onNotificat
   const [unreadCount, setUnreadCount] = useState(0);
   const displayName = user?.name || user?.username || (user as any)?.first_name || 'User';
 
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
     try {
       const notifications = await apiClient.notifications.getAll();
       const unread = (notifications || []).filter((notification: any) => {
@@ -28,13 +28,22 @@ export function Header({ breadcrumbPath = ['Dashboard', 'Overview'], onNotificat
       console.error('Failed to fetch unread notifications for header:', error);
       setUnreadCount(0);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    const handleNotificationsUpdated = () => {
+      fetchUnreadCount();
+    };
+
     fetchUnreadCount();
     const intervalId = window.setInterval(fetchUnreadCount, 60000);
-    return () => window.clearInterval(intervalId);
-  }, []);
+    window.addEventListener('notifications-updated', handleNotificationsUpdated);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('notifications-updated', handleNotificationsUpdated);
+    };
+  }, [fetchUnreadCount]);
 
   const unreadBadge = useMemo(() => {
     if (unreadCount <= 0) return null;

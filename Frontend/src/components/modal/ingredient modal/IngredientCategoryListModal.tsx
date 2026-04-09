@@ -87,7 +87,7 @@ export function IngredientCategoryListModal({ isOpen, onClose, categories = [], 
         setEditingCategory(null);
     };
 
-    const handleAddCategory = (data: { name: string; description?: string }) => {
+    const handleAddCategory = () => {
         if (onCategoriesRefresh) {
             onCategoriesRefresh();
         }
@@ -232,7 +232,7 @@ export function IngredientCategoryListModal({ isOpen, onClose, categories = [], 
             <AddIngredientCategoryModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
-                onSave={handleAddCategory}
+                onCategoryAdded={handleAddCategory}
             />
             
             <EditIngredientCategoryModal

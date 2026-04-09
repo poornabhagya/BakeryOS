@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { AlertTriangle, X } from 'lucide-react';
 import apiClient from '../../services/api';
+import { formatQuantityForDisplay } from '../../utils/conversions';
 
 
 interface AddWastageModalProps {
@@ -13,6 +14,7 @@ interface AddWastageModalProps {
     ingredientName: string;
     currentQty: number;
     unit: string;
+    trackingType?: string;
     expiryDate: string;
   };
   onConfirm: (wastage: {
@@ -37,6 +39,7 @@ export const AddWastageModal: React.FC<AddWastageModalProps> = ({
   onConfirm,
 }) => {
   const [quantity, setQuantity] = useState<number | "">("");
+  const [selectedUnit, setSelectedUnit] = useState('kg');
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [touched, setTouched] = useState(false);
@@ -78,10 +81,39 @@ export const AddWastageModal: React.FC<AddWastageModalProps> = ({
     }
   };
 
+  const trackingType = batchData.trackingType || 'Weight';
+
+  const getUnitOptions = (type: string) => {
+    if (type === 'Volume') return ['L', 'ml'];
+    if (type === 'Count') return ['nos'];
+    return ['kg', 'g'];
+  };
+
+  const convertToBaseUnit = (qty: number, unit: string, type: string): number => {
+    if (type === 'Weight') return unit === 'kg' ? qty * 1000 : qty;
+    if (type === 'Volume') return unit === 'L' ? qty * 1000 : qty;
+    return qty;
+  };
+
+  const convertFromBaseUnit = (qty: number, unit: string, type: string): number => {
+    if (type === 'Weight') return unit === 'kg' ? qty / 1000 : qty;
+    if (type === 'Volume') return unit === 'L' ? qty / 1000 : qty;
+    return qty;
+  };
+
+  useEffect(() => {
+    const defaultUnit = getUnitOptions(trackingType)[0];
+    setSelectedUnit(defaultUnit);
+  }, [trackingType, isOpen]);
+
+  const normalizedQuantity = typeof quantity === 'number' ? quantity : 0;
+  const quantityInBaseUnit = convertToBaseUnit(normalizedQuantity, selectedUnit, trackingType);
+  const maxInSelectedUnit = convertFromBaseUnit(batchData.currentQty || 0, selectedUnit, trackingType);
+
   const qtyInvalid =
     quantity === "" ||
     quantity <= 0 ||
-    (typeof quantity === "number" && quantity > batchData.currentQty);
+    (typeof quantity === "number" && quantityInBaseUnit > batchData.currentQty);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +122,7 @@ export const AddWastageModal: React.FC<AddWastageModalProps> = ({
       try {
         await onConfirm({
           batchID: batchData.batchID,
-          quantity,
+          quantity: quantityInBaseUnit,
           reason,
           note: note.trim() ? note : undefined,
         });
@@ -139,7 +171,7 @@ export const AddWastageModal: React.FC<AddWastageModalProps> = ({
           <div>
             <span className="text-xs text-gray-500">Current Availability</span>
             <span className="ml-2 text-sm font-bold text-green-700 bg-green-50 px-2 py-1 rounded-md inline-block">
-              {batchData.currentQty} {batchData.unit}
+              {formatQuantityForDisplay(batchData.currentQty, trackingType)}
             </span>
           </div>
         </div>
@@ -153,17 +185,26 @@ export const AddWastageModal: React.FC<AddWastageModalProps> = ({
             }>
               <input
                 type="number"
-                min={1}
-                max={batchData.currentQty}
+                min={0}
+                max={maxInSelectedUnit}
+                step={selectedUnit === 'nos' ? 1 : 0.01}
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value === "" ? "" : Number(e.target.value))}
                 onBlur={() => setTouched(true)}
                 className="w-24 px-3 py-2 rounded-l outline-none bg-transparent text-gray-900"
                 required
               />
-              <span className="px-3 py-2 text-gray-400 text-sm select-none bg-gray-50 rounded-r border-l border-gray-200">{batchData.unit}</span>
+              <select
+                value={selectedUnit}
+                onChange={(e) => setSelectedUnit(e.target.value)}
+                className="px-3 py-2 text-gray-600 text-sm select-none bg-gray-50 rounded-r border-l border-gray-200 outline-none"
+              >
+                {getUnitOptions(trackingType).map((unit) => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
+              </select>
             </div>
-            {touched && typeof quantity === "number" && quantity > batchData.currentQty && (
+            {touched && typeof quantity === "number" && quantityInBaseUnit > batchData.currentQty && (
               <div className="flex items-center gap-1 text-xs text-red-600 mt-1">
                 <AlertTriangle className="w-4 h-4" />
                 Error: Cannot waste more than available stock

@@ -108,7 +108,7 @@ def setup_stock_history_signals():
                 qty_after=qty_after,
                 change_amount=instance.quantity,
                 reference_id=instance.batch_id,
-                notes=f"New batch from {ingredient.supplier}. Cost: {instance.cost_price}/unit",
+                notes=f"New batch from {ingredient.supplier}. Total batch cost: {instance.total_batch_cost}",
             )
     
     @receiver(post_delete, sender=IngredientBatch)
@@ -202,23 +202,27 @@ def setup_notification_signals():
     @receiver(post_save, sender=Ingredient)
     def check_low_stock_notification(sender, instance, **kwargs):
         """
-        Create notification when ingredient falls below low stock threshold.
+        Create notification when ingredient crosses into low stock state.
         """
-        if instance.total_quantity < instance.low_stock_threshold:
-            # Check if notification already exists for this ingredient today
-            today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            recent_notification = Notification.objects.filter(
-                type='LowStock',
-                title__contains=instance.name,
-                created_at__gte=today_start
-            ).first()
-            
-            if recent_notification:
-                return  # Already notified today
-            
+        current_is_low = instance.total_quantity <= instance.low_stock_threshold
+        if not current_is_low:
+            return
+
+        previous_snapshot = getattr(instance, '_previous_stock_snapshot', None)
+        if previous_snapshot:
+            previous_total = previous_snapshot['total_quantity']
+            previous_threshold = previous_snapshot['low_stock_threshold']
+            previous_is_low = previous_total <= previous_threshold
+            if previous_is_low:
+                return
+
             notification = Notification.objects.create(
                 title=f"Low Stock: {instance.name}",
-                message=f"{instance.name} ({instance.total_quantity} {instance.base_unit}) is below the threshold of {instance.low_stock_threshold}",
+                message=(
+                    f"{instance.name} ({instance.total_quantity} {instance.base_unit}) "
+                    f"is at or below the threshold of "
+                    f"{instance.threshold_display_value} {instance.effective_threshold_unit}"
+                ),
                 type='LowStock',
                 icon='warning'
             )
@@ -230,6 +234,19 @@ def setup_notification_signals():
                     notification=notification,
                     user=user
                 )
+
+    @receiver(pre_save, sender=Ingredient)
+    def capture_previous_stock_state(sender, instance, **kwargs):
+        """Store previous stock/threshold values to detect low-stock transitions."""
+        if not instance.pk:
+            instance._previous_stock_snapshot = None
+            return
+
+        previous = Ingredient.objects.filter(pk=instance.pk).values(
+            'total_quantity',
+            'low_stock_threshold',
+        ).first()
+        instance._previous_stock_snapshot = previous
     
     @receiver(post_save, sender=ProductWastage)
     def check_high_wastage_notification(sender, instance, created, **kwargs):

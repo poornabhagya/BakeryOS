@@ -82,7 +82,7 @@ export function CategoryListModal({ isOpen, onClose, categories = [], onCategori
         setEditingCategory(null);
     };
 
-    const handleAddCategory = (data: { name: string }) => {
+    const handleAddCategory = () => {
         if (onCategoriesRefresh) {
             onCategoriesRefresh();
         }
@@ -225,7 +225,7 @@ export function CategoryListModal({ isOpen, onClose, categories = [], onCategori
             <AddProductCategoryModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
-                onSave={handleAddCategory}
+                onCategoryAdded={handleAddCategory}
             />
 
             <EditCategoryModal

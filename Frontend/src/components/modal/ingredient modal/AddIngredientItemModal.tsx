@@ -7,6 +7,11 @@ const CATEGORIES = ['Flour', 'Dairy', 'Spices', 'Vegetables', 'Fruits', 'Oils', 
 const SHELF_UNITS = ['days', 'weeks', 'months', 'years'];
 // Must match Django model TRACKING_TYPE_CHOICES exactly
 const TRACKING_TYPES = ['Weight', 'Volume', 'Count'];
+const THRESHOLD_UNITS: Record<string, string[]> = {
+	Weight: ['kg', 'g'],
+	Volume: ['L', 'ml'],
+	Count: ['nos'],
+};
 
 function generateProductId() {
 	return `#PROD-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -31,6 +36,7 @@ export function AddIngredientItemModal({ open, onClose, onItemAdded, ingredientC
 	const [preferredSupplierContact, setPreferredSupplierContact] = useState("");
 	const [trackingType, setTrackingType] = useState('Weight'); // Must match Django choices
 	const [lowStockThreshold, setLowStockThreshold] = useState(10);
+	const [thresholdUnit, setThresholdUnit] = useState('kg');
 	
 	// Loading and toast states
 	const [isLoading, setIsLoading] = useState(false);
@@ -83,6 +89,13 @@ export function AddIngredientItemModal({ open, onClose, onItemAdded, ingredientC
 
 	// ...existing code...
 
+	React.useEffect(() => {
+		const allowedUnits = THRESHOLD_UNITS[trackingType] || ['g'];
+		if (!allowedUnits.includes(thresholdUnit)) {
+			setThresholdUnit(allowedUnits[0]);
+		}
+	}, [trackingType, thresholdUnit]);
+
 	const handleSave = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setIsLoading(true);
@@ -123,7 +136,8 @@ export function AddIngredientItemModal({ open, onClose, onItemAdded, ingredientC
 				category_id: Number(category), // PrimaryKey - must be integer ID
 				tracking_type: trackingType, // Must be 'Weight', 'Volume', or 'Count' (capitalized!)
 				base_unit: baseUnit, // Required: 'kg', 'liters', or 'pieces'
-				low_stock_threshold: lowStockNum, // Decimal field
+				low_stock_threshold: lowStockNum, // User raw threshold value
+				threshold_unit: thresholdUnit,
 				shelf_life: shelfLifeNum, // Integer field
 				shelf_unit: shelfUnit, // Already lowercase from state: 'days', 'weeks', 'months', 'years'
 				supplier: preferredSupplierName?.trim() || null,
@@ -145,6 +159,7 @@ export function AddIngredientItemModal({ open, onClose, onItemAdded, ingredientC
 			setInstructions('');
 			setPreferredSupplierName('');
 			setPreferredSupplierContact('');
+			setThresholdUnit('kg');
 			
 			// Close modal after short delay to show toast
 			setTimeout(() => {
@@ -219,13 +234,13 @@ export function AddIngredientItemModal({ open, onClose, onItemAdded, ingredientC
 								<div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg flex gap-2 items-start mt-2">
 									<Info className="w-5 h-5 mt-0.5 text-blue-500" />
 									<div className="text-sm">
-										{trackingType === 'weight' && (
+										{trackingType === 'Weight' && (
 											<span>System tracks stock in <strong>Grams (g)</strong>. Best for solids like Flour, Sugar.</span>
 										)}
-										{trackingType === 'volume' && (
+										{trackingType === 'Volume' && (
 											<span>System tracks stock in <strong>Milliliters (ml)</strong>. Best for liquids like Oil, Milk.</span>
 										)}
-										{trackingType === 'count' && (
+										{trackingType === 'Count' && (
 											<span>System tracks stock by <strong>Count (nos)</strong>. Best for Eggs, Packets.</span>
 										)}
 									</div>
@@ -242,7 +257,7 @@ export function AddIngredientItemModal({ open, onClose, onItemAdded, ingredientC
 						</div>
 						<p className="text-sm text-gray-600 mb-4">Define when items in this category should be marked as Low Stock.</p>
 						<div className="grid grid-cols-12 gap-4 items-end">
-							<div className="col-span-12">
+							<div className="col-span-12 md:col-span-8">
 								<label className="block text-xs font-bold uppercase text-gray-500 mb-1">Alert when quantity drops below or equals:</label>
 								<input
 									type="number"
@@ -252,14 +267,26 @@ export function AddIngredientItemModal({ open, onClose, onItemAdded, ingredientC
 									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
 								/>
 							</div>
+							<div className="col-span-12 md:col-span-4">
+								<label className="block text-xs font-bold uppercase text-gray-500 mb-1">Threshold Unit</label>
+								<select
+									value={thresholdUnit}
+									onChange={e => setThresholdUnit(e.target.value)}
+									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+								>
+									{(THRESHOLD_UNITS[trackingType] || ['g']).map(unit => (
+										<option key={unit} value={unit}>{unit}</option>
+									))}
+								</select>
+							</div>
 						</div>
 						<div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
 							<div className="text-sm text-blue-800">
-								<span className="font-medium mb-2 block">Based on your setting (Qty ≤ 10):</span>
+								<span className="font-medium mb-2 block">Based on your setting (Qty ≤ {lowStockThreshold} {thresholdUnit}):</span>
 								<ul className="space-y-1">
 									<li>• <strong>Out of Stock:</strong> 0 qty</li>
-									<li>• <strong>Low Stock:</strong> 1 to 10 qty (Alert Triggered)</li>
-									<li>• <strong>In Stock:</strong> More than 10 qty</li>
+									<li>• <strong>Low Stock:</strong> Qty less than or equal to your threshold</li>
+									<li>• <strong>In Stock:</strong> Qty greater than your threshold</li>
 								</ul>
 							</div>
 						</div>

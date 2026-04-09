@@ -254,6 +254,11 @@ class IngredientWastageCreateSerializer(serializers.ModelSerializer):
         batch = validated_data.get('batch_id')
         quantity = validated_data['quantity']
 
+        # Normalize to cost-per-base-unit for accurate loss calculation.
+        if batch and batch.quantity and batch.quantity > 0:
+            batch_total_cost = batch.total_batch_cost if batch.total_batch_cost is not None else Decimal('0')
+            validated_data['unit_cost'] = batch_total_cost / batch.quantity
+
         # Deduct from specific batch stock when linked
         if batch:
             batch.current_qty -= quantity
