@@ -62,7 +62,9 @@ export function WastageOverview() {
 
         const [response, ingredientsResponse, reasonsResponse] = await Promise.all([
           wastageApi.getAll(),
-          apiClient.ingredients.getAllPages(),
+          canSeeIngredientData
+            ? apiClient.ingredients.getAllPages()
+            : Promise.resolve({ items: [] }),
           apiClient.wastageReason.getAll(),
         ]);
 

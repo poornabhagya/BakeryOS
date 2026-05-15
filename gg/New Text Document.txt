@@ -1,0 +1,58 @@
+1. analyze the whole project and explain every function in category 3 "3. Sales, Analytics, and Decision-Support Functions
+Sales history with filtering (date range, cashier, payment mode).
+Payment-method breakdown analytics.
+Daily/weekly/monthly sales analytics.
+Top-selling products and sales by category.
+Sales by cashier performance analytics.
+Revenue vs cost/profit-oriented analytics.
+Inventory analytics (stock value, stock health, low-stock/out-of-stock counts).
+Wastage analytics (totals, trends, reason-wise breakdown).
+Dashboard KPI aggregation endpoints.
+Role-specific dashboards (manager, baker, storekeeper).
+Export/reporting support (including analytics/wastage export flows in the project)." and please include these too, For EACH function in Category 1, you MUST provide the following in a well-structured Markdown (.md) format "1. A brief technical explanation: How is this implemented in the code (which models, views, or logic classes are involved)?
+2. Code Snippets: Provide the most critical pieces of code (Python/Django for Backend or TypeScript/React for Frontend) that demonstrate this functionality.
+3. Logic Flow: Briefly describe the logic flow (e.g., Request -> View -> Serializer -> Model Update). 3. Code Location for Screenshots: I need to take code snapshots. Provide the EXACT File Name, File Path, the specific Class/Function name to search for, and the approximate Line Numbers.
+4. Code Snippets: Provide the most critical and impressive pieces of code (Python/Django for Backend or TypeScript/React for Frontend) that demonstrate this functionality." to your explanation document, and also mention what are the files, folders, file path and what are the lines that function included (i need to add code snapshot for my document for that i need code lines that each function included), and create .md file and add that all the function explanation to that. Please generate the detailed .md content for Category 1 now. After you finish, I will prompt you for Category 4.
+
+
+2. Great! Now do the exact same thing for '4. Notification and Alert Functions
+System notification generation for low stock, expiry, wastage, and system events.
+Per-user notification receipt tracking.
+Read/unread state management.
+Mark one/all notifications as read.
+Archive/snooze notification support.
+In-app notification center and low-stock alert UI.' using the same format.
+
+
+3. Great! Now do the exact same thing for '5. Frontend Workflow Functions (User-Visible Implementation)
+Login screen and authenticated app shell.
+Role-based navigation and page guarding.
+Dashboard workspace with KPIs/charts.
+Billing/POS screen with cart operations and checkout flow.
+Stock management screen for product + ingredient inventory operations.
+Wastage overview and wastage-entry flows.
+Sales summary/history views.
+User management UI (manager actions).
+Discount management UI.
+Notification screen.
+Modal-driven workflows for add/edit/view/delete across users, categories, batches, products, wastage, discounts, sales, and stock history.' using the same format.
+
+
+4. Great! Now do the exact same thing for '6. Platform/Engineering Functions (Supporting Implementation)
+REST API architecture with modular ViewSets, serializers, filters, and permission classes.
+Search, filtering, ordering, and pagination across key modules.
+Query optimization patterns for related-data loading.
+Signal-based automation for ID generation and stock/audit updates.
+Atomic transaction handling in production workflows.
+API schema/documentation support.
+Dockerized multi-service runtime (frontend, backend, PostgreSQL).
+Environment-based configuration for dev/prod parity.
+Optional async/task infrastructure readiness with Celery + Redis.
+Comprehensive test and diagnostic script suite for endpoint, analytics, migration, and data-flow verification.' using the same format.
+
+
+5. Great! Now do the exact same thing for '7. Non-Product but Important Project Utilities
+Manual test scripts and API verification scripts.
+Migration/debug/cleanup scripts.
+DB state checkers and recovery/fix helpers.
+Postman collection for API testing and reportable test evidence.' using the same format.

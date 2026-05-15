@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Flame, ChefHat, Star } from 'lucide-react';
 import { inventoryApi, wastageApi, analyticsApi } from '../../services/api';
 
@@ -27,6 +27,7 @@ export function BakerDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('Today');
+  const requestSeqRef = useRef(0);
 
   const [lowStockProducts, setLowStockProducts] = useState<LowStockProduct[]>([]);
   const [filteredWastage, setFilteredWastage] = useState<WastageRow[]>([]);
@@ -73,9 +74,14 @@ export function BakerDashboard() {
 
   useEffect(() => {
     const fetchBakerData = async () => {
+      const requestSeq = ++requestSeqRef.current;
+
       try {
         setIsLoading(true);
         setError(null);
+        setLowStockProducts([]);
+        setFilteredWastage([]);
+        setTopSellingProducts([]);
 
         const { start, end } = getFilterRange(timeFilter);
         const dateFrom = toIsoDate(start);
@@ -99,6 +105,8 @@ export function BakerDashboard() {
                 : 'Medium',
             }))
           : [];
+        if (requestSeq !== requestSeqRef.current) return;
+
         setLowStockProducts(lowProducts);
 
         // Wastage: apply selected time filter.
@@ -117,6 +125,8 @@ export function BakerDashboard() {
             createdAt: item.created_at,
           }));
 
+        if (requestSeq !== requestSeqRef.current) return;
+
         setFilteredWastage(wastageRows);
 
         const topRows = Array.isArray(productStats?.top_products)
@@ -125,12 +135,18 @@ export function BakerDashboard() {
               quantity_sold: Number(item.quantity_sold || 0),
             }))
           : [];
+        if (requestSeq !== requestSeqRef.current) return;
+
         setTopSellingProducts(topRows);
       } catch (err) {
+        if (requestSeq !== requestSeqRef.current) return;
+
         console.error('Error fetching baker dashboard data:', err);
         setError('Failed to load dashboard data. Please try again.');
       } finally {
-        setIsLoading(false);
+        if (requestSeq === requestSeqRef.current) {
+          setIsLoading(false);
+        }
       }
     };
 

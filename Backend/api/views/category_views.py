@@ -8,7 +8,7 @@ from rest_framework.pagination import PageNumberPagination
 # from django_filters.rest_framework import DjangoFilterBackend
 
 from api.models import Category
-from api.permissions import IsManager
+from api.permissions import IsManager, IsManagerOrStorekeeperOrBaker
 from api.serializers import (
     CategoryListSerializer,
     CategoryDetailSerializer,
@@ -92,12 +92,15 @@ class CategoryViewSet(OptimizedQueryMixin, viewsets.ModelViewSet):
         """
         Permissions by HTTP method:
         - Read operations (GET/HEAD/OPTIONS): any authenticated user
-        - Write operations (POST/PUT/PATCH/DELETE): manager only
+        - Write operations (POST/PUT/PATCH): manager, storekeeper, or baker
+        - Delete operations (DELETE): manager only
         """
         if self.request.method in SAFE_METHODS:
             permission_classes = [IsAuthenticated]
-        else:
+        elif self.request.method == 'DELETE':
             permission_classes = [IsManager]
+        else:
+            permission_classes = [IsManagerOrStorekeeperOrBaker]
         
         return [permission() for permission in permission_classes]
     
