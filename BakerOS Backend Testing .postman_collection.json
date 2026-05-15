@@ -1,0 +1,2311 @@
+{
+  "info": {
+    "_postman_id": "b0d1c34d-4811-4751-97b0-0ba4a6bd35d7",
+    "name": "BakerOS Backend Testing ",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "43059844"
+  },
+  "item": [
+    {
+      "name": "http://127.0.0.1:8000/api/auth/login/ (task2.3 testing)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"username\": \"admin\",\r\n    \"password\": \"admin@123\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/auth/login/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "auth",
+            "login",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/users/  (2.3 GET Request)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/users/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "users",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/users/ (add user 2.3)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"username\": \"kasun_baker\",\r\n    \"password\": \"SecurePass@123\",\r\n    \"password_confirm\": \"SecurePass@123\",\r\n    \"full_name\": \"Kasun Perera\",\r\n    \"role\": \"Baker\",\r\n    \"contact\": \"077-1234567\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/users/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "users",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/users/7/ (2.3 update user)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"full_name\": \"Kasun Perera Updated\",\r\n    \"contact\": \"071-9999999\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/users/7/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "users",
+            "7",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/users/7/ (soft delete)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/users/7/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "users",
+            "7",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/users/7/ (check the soft delete)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/users/7/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "users",
+            "7",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/users/2/ (check manger role can delete themselves)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/users/2/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "users",
+            "2",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/categories/ (task 3.1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/categories/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "categories",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/categories/ (task3.1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/categories/?type=Product",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "categories",
+            ""
+          ],
+          "query": [
+            {
+              "key": "type",
+              "value": "Product"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/categories/ (task3.1 add category)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"name\": \"Donuts\",\r\n    \"type\": \"Product\",\r\n    \"description\": \"All kinds of donuts\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/categories/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "categories",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/categories/1/ (3.1 update)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"description\": \"Soft and fresh buns updated\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/categories/1/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "categories",
+            "1",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/categories/13/",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/categories/13/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "categories",
+            "13",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/categories/",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/categories/?search=Bread",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "categories",
+            ""
+          ],
+          "query": [
+            {
+              "key": "search",
+              "value": "Bread"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "New Request",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/ingredients/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "ingredients",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/ingredients/by_category/ (task 3.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/ingredients/by_category/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "ingredients",
+            "by_category",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/ingredients/ (task 3.2)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"name\": \"Heavy Cream\",\r\n    \"category_id\": 8, \r\n    \"supplier\": \"Dairy Fresh\",\r\n    \"tracking_type\": \"Volume\",\r\n    \"base_unit\": \"liters\",\r\n    \"low_stock_threshold\": 20,\r\n    \"shelf_life\": 14,\r\n    \"shelf_unit\": \"days\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/ingredients/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "ingredients",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/ingredients/low_stock/ (task 3.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/ingredients/low_stock/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "ingredients",
+            "low_stock",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/ingredients/ (task 3.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/ingredients/?search=Flour",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "ingredients",
+            ""
+          ],
+          "query": [
+            {
+              "key": "search",
+              "value": "Flour"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/ingredients/13/ (task 3.2)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/ingredients/13/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "ingredients",
+            "13",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/batches/ (task 3.3)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/batches/1/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "batches",
+            "1",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/batches/ (3.3)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"ingredient_id\": 1, \r\n    \"quantity\": \"100.00\",\r\n    \"current_qty\": \"100.00\",\r\n    \"cost_price\": \"10.50\",\r\n    \"made_date\": \"2026-03-23T10:00:00Z\",\r\n    \"expire_date\": \"2026-05-23T10:00:00Z\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/batches/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "batches",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/batches/1/consume/ (3.3 spend qty)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"amount\": \"25.00\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/batches/1/consume/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "batches",
+            "1",
+            "consume",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/batches/expiring/ (3.3 expiring_within_days)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/batches/expiring/?days=7",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "batches",
+            "expiring",
+            ""
+          ],
+          "query": [
+            {
+              "key": "days",
+              "value": "7"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/batches/1/consume/ (spend the quantity more that stock)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"amount\": \"100.00\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/batches/1/consume/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "batches",
+            "1",
+            "consume",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/ (3.4 task)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/products/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/ (3.4 task)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"category_id\": 1,\r\n    \"name\": \"Sesame Bun\",\r\n    \"description\": \"Burger bun with sesame seeds\",\r\n    \"cost_price\": \"16.00\",\r\n    \"selling_price\": \"28.00\",\r\n    \"current_stock\": \"30\",\r\n    \"shelf_life\": 2,\r\n    \"shelf_unit\": \"days\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/products/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/low-stock/ (3.4)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/products/low-stock/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            "low-stock",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/by-category/1/ (3.4)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/products/by-category/1/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            "by-category",
+            "1",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/products/ (3.4)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"category_id\": 1,\r\n    \"name\": \"Test Margin Bun\",\r\n    \"description\": \"Testing profit margin calculation\",\r\n    \"cost_price\": \"100.00\",\r\n    \"selling_price\": \"150.00\",\r\n    \"current_stock\": \"10\",\r\n    \"shelf_life\": 1,\r\n    \"shelf_unit\": \"days\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/products/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/recipes/1/items/ (task 3.5)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"ingredient_id\": 1,\r\n    \"quantity_required\": \"0.50\" \r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/recipes/1/items/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "recipes",
+            "1",
+            "items",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/recipes/1/ (3.5)",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/recipes/1/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "recipes",
+            "1",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/recipes/1/validate/ (3.5)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/recipes/1/validate/",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "recipes",
+            "1",
+            "validate",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/recipes/1/batch_required/ (3.5)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/recipes/1/batch_required/?qty=50",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "recipes",
+            "1",
+            "batch_required",
+            ""
+          ],
+          "query": [
+            {
+              "key": "qty",
+              "value": "50"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/discounts/ (4.1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"name\": \"Summer Sale\",\r\n  \"description\": \"All products summer promotion\",\r\n  \"discount_type\": \"Percentage\",\r\n  \"value\": 20,\r\n  \"applicable_to\": \"All\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/discounts/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "discounts",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/discounts/1/validate/ (4.1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"product_id\": 1\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/discounts/1/validate/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "discounts",
+            "1",
+            "validate",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/discounts/1/apply/ (4.1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"amount\": 1000,\r\n  \"product_id\": 1\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/discounts/1/apply/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "discounts",
+            "1",
+            "apply",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/discounts/ (4.1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"name\": \"Crazy Sale\",\r\n  \"discount_type\": \"Percentage\",\r\n  \"value\": 150,\r\n  \"applicable_to\": \"All\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/discounts/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "discounts",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/sales/ (4.2)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"items\": [\r\n    {\r\n      \"product_id\": 1,\r\n      \"quantity\": \"2.00\",\r\n      \"unit_price\": \"50.00\"\r\n    }\r\n  ],\r\n  \"payment_method\": \"Cash\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/sales/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "sales",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/1/ (4.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/products/1/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            "1",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/sales/ (4.2)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"items\": [\r\n    {\r\n      \"product_id\": 1,\r\n      \"quantity\": \"2.00\",\r\n      \"unit_price\": \"50.00\"\r\n    },\r\n    {\r\n      \"product_id\": 2,\r\n      \"quantity\": \"3.00\",\r\n      \"unit_price\": \"30.00\"\r\n    }\r\n  ],\r\n  \"discount_id\": 1, \r\n  \"payment_method\": \"Card\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/sales/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "sales",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/sales/analytics/ (4.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/sales/analytics/?period=today",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "sales",
+            "analytics",
+            ""
+          ],
+          "query": [
+            {
+              "key": "period",
+              "value": "today"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/wastage-reasons/ (5.1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/wastage-reasons/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "wastage-reasons",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/wastage-reasons/ (5.1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"reason\": \"Quality Failure\",\r\n  \"description\": \"Items that did not pass quality check\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/wastage-reasons/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "wastage-reasons",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/wastage-reasons/9/ (5.1)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"description\": \"Products failed quality inspection - Updated via PATCH\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/wastage-reasons/9/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "wastage-reasons",
+            "9",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/1/ (5.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/products/1/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            "1",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/product-wastages/ (5.2)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"product_id\": 1,\r\n  \"quantity\": \"5.00\",\r\n  \"unit_cost\": \"10.00\",\r\n  \"reason_id\": 1,\r\n  \"notes\": \"Expired and removed from shelf\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/product-wastages/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "product-wastages",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/product-wastages/ (5.2)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"product_id\": 1,\r\n  \"quantity\": \"1000.00\",\r\n  \"unit_cost\": \"10.00\",\r\n  \"reason_id\": 1,\r\n  \"notes\": \"Expired and removed from shelf\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/product-wastages/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "product-wastages",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/product-wastages/1/ (5.2)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/product-wastages/1/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "product-wastages",
+            "1",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/1/ (5.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/products/1/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            "1",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/ingredient-wastages/ (5.3)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"ingredient_id\": 1,\r\n  \"quantity\": \"5.50\",\r\n  \"unit_cost\": \"10.25\",\r\n  \"reason_id\": 1,\r\n  \"notes\": \"Batch expired on 2026-03-20\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/ingredient-wastages/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "ingredient-wastages",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/auth/login/ (5.3)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "",
+            "value": "",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"username\": \"cashier1\",\r\n  \"password\": \"testpassword123\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/auth/login/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "auth",
+            "login",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/ingredient-wastages/ (5.3)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token 5f5a2aaa323e01d38d0b9c5741af91b5140ad447",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"ingredient_id\": 1,\r\n  \"quantity\": \"5.50\",\r\n  \"unit_cost\": \"10.25\",\r\n  \"reason_id\": 1,\r\n  \"notes\": \"Batch expired on 2026-03-20\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/ingredient-wastages/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "ingredient-wastages",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/notifications/ (7.1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/notifications/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "notifications",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/notifications/unread/ (7.1)",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/notifications/unread/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "notifications",
+            "unread",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/product-wastages/ (7.1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"product_id\": 1,\r\n  \"quantity\": \"5.00\",\r\n  \"unit_cost\": \"10.00\",\r\n  \"reason_id\": 1,\r\n  \"notes\": \"Testing auto-notification generation\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/product-wastages/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "product-wastages",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/notifications/read_all/ (7.1)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/notifications/read_all/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "notifications",
+            "read_all",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/analytics/sales/revenue/ (8.1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/analytics/sales/revenue/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "analytics",
+            "sales",
+            "revenue",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/analytics/sales/top_products/ (8.1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/analytics/sales/top_products/?limit=5",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "analytics",
+            "sales",
+            "top_products",
+            ""
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "5"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://127.0.0.1:8000/api/analytics/sales/daily/ (8.1)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/analytics/sales/daily/?date_from=2026-03-20&date_to=2026-03-25",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "analytics",
+            "sales",
+            "daily",
+            ""
+          ],
+          "query": [
+            {
+              "key": "date_from",
+              "value": "2026-03-20",
+              "type": "text"
+            },
+            {
+              "key": "date_to",
+              "value": "2026-03-25",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/analytics/inventory/stock_value/ (8.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/analytics/inventory/stock_value/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "analytics",
+            "inventory",
+            "stock_value",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/analytics/inventory/expired/ (8.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/analytics/inventory/expired/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "analytics",
+            "inventory",
+            "expired",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/analytics/inventory/wastage_trend/ (8.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/analytics/inventory/wastage_trend/?trend_type=daily",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "analytics",
+            "inventory",
+            "wastage_trend",
+            ""
+          ],
+          "query": [
+            {
+              "key": "trend_type",
+              "value": "daily"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/analytics/inventory/turnover/ (8.2)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/analytics/inventory/turnover/?date_from=2026-02-25&date_to=2026-03-25",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "analytics",
+            "inventory",
+            "turnover",
+            ""
+          ],
+          "query": [
+            {
+              "key": "date_from",
+              "value": "2026-02-25",
+              "type": "text"
+            },
+            {
+              "key": "date_to",
+              "value": "2026-03-25",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/dashboard/kpis/ (8.3)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/api/dashboard/kpis/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "dashboard",
+            "kpis",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/ (9.1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token 5f5a2aaa323e01d38d0b9c5741af91b5140ad447",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"name\": \"Hacker Bread\",\r\n  \"category_id\": 1,\r\n  \"cost_price\": \"50.00\",\r\n  \"selling_price\": \"100.00\",\r\n  \"current_stock\": 20\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/products/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/ (9.2)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"name\": \"Manager Special Bread\",\r\n  \"category_id\": 1,\r\n  \"cost_price\": \"50.00\",\r\n  \"selling_price\": \"100.00\",\r\n  \"current_stock\": 20,\r\n  \"shelf_life\": 2,      // <--- මෙතනට 1 ට වඩා වැඩි අගයක් දෙන්න\r\n  \"shelf_unit\": \"days\"  // <--- ඒ වගේම shelf_unit එකත් තියෙනවාද බලන්න\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/products/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/users/ (9.2)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"username\": \"test_security\",\r\n  \"password\": \"123\",  // <--- මේක ඉතාම දුර්වලයි\r\n  \"password_confirm\": \"123\",\r\n  \"email\": \"test@security.com\",\r\n  \"role\": \"Baker\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/users/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "users",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8000/api/products/ (9.2)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token f47260510bc9dcf710807cb2a0966c87237f8db1",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"name\": \"    Super    Bread    \", // <--- මෙතන ලොකු හිස්තැන් තියෙනවා\r\n  \"category_id\": 1,\r\n  \"cost_price\": \"50.00\",\r\n  \"selling_price\": \"100.00\",\r\n  \"current_stock\": 10,\r\n  \"shelf_life\": 2,\r\n  \"shelf_unit\": \"days\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/products/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8000",
+          "path": [
+            "api",
+            "products",
+            ""
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
