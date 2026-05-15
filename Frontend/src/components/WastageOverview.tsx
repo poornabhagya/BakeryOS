@@ -28,6 +28,10 @@ type WastageItem = {
   date: string; // yyyy-mm-dd
 };
 
+// Helper: format a Date as local YYYY-MM-DD (avoids UTC shift from toISOString)
+const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
+const formatLocalDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
 export function WastageOverview() {
   const { user } = useAuth();
   const isManager = user?.role === 'Manager';
@@ -36,7 +40,7 @@ export function WastageOverview() {
   const canSeeProductData = !isStorekeeper;
   const canSeeIngredientData = !isCashier;
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = formatLocalDate(new Date());
   const [dateFrom, setDateFrom] = useState<string>('1970-01-01'); // All Time default
   const [dateTo, setDateTo] = useState<string>(today);
   const [timePeriod, setTimePeriod] = useState<string>('All Time');
@@ -114,7 +118,7 @@ export function WastageOverview() {
             unitCost: item.unit_cost || 0,
             reportedBy: item.reported_by_name || 'System',
             time: new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            date: new Date(item.created_at).toISOString().slice(0, 10),
+            date: formatLocalDate(new Date(item.created_at)),
           };
 
           console.log('Transformed item:', transformedItem);
@@ -197,13 +201,13 @@ export function WastageOverview() {
       end = new Date();
     }
 
-    const toIso = (d: Date) => d.toISOString().slice(0,10);
-    setDateFrom(toIso(start));
-    setDateTo(toIso(end));
+    const toIsoLocal = (d: Date) => formatLocalDate(d);
+    setDateFrom(toIsoLocal(start));
+    setDateTo(toIsoLocal(end));
   };
 
   const resetFilters = () => {
-    const todayIso = new Date().toISOString().slice(0,10);
+    const todayIso = formatLocalDate(new Date());
     setDateFrom('1970-01-01'); // Reset to All Time
     setDateTo(todayIso);
     setTimePeriod('All Time');
